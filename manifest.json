@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub PR Code Only",
+  "version": "0.1.0",
+  "description": "Modo de foco nos diffs de Pull Requests, com filtro opcional de arquivos e comentários.",
+  "permissions": [
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://github.com/*"
+      ],
+      "js": [
+        "rules.js",
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

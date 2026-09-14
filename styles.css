@@ -1,0 +1,33 @@
+/* Every page rule is gated by a class owned by this extension. */
+body.prco-active.prco-ancestor > :not(.prco-ancestor):not(.prco-root):not(#prco-toolbar),
+body.prco-active .prco-ancestor > :not(.prco-ancestor):not(.prco-root):not(#prco-toolbar) {
+  display: none !important;
+}
+body.prco-active .prco-ancestor,
+body.prco-active .prco-root {
+  max-width: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+body.prco-active {
+  padding-bottom: 110px !important;
+}
+body.prco-active .prco-hidden-file {
+  display: none !important;
+}
+/* Exact UI selectors only; never hide code based on its text. */
+body.prco-active.prco-hide-comments .prco-root .js-inline-comments-container,
+body.prco-active.prco-hide-comments .prco-root .review-thread,
+body.prco-active.prco-hide-comments .prco-root [data-testid="review-thread"],
+body.prco-active.prco-hide-comments .prco-root [data-testid="inline-comments"] {
+  display: none !important;
+}
+#prco-toolbar {
+  all: initial !important;
+  position: fixed !important;
+  z-index: 2147483647 !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  max-width: calc(100vw - 32px) !important;
+}
