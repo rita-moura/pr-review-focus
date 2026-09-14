@@ -31,7 +31,7 @@
     if (attributeNode && pathAttribute(attributeNode)) return pathAttribute(attributeNode);
 
     // Modern React headers use CSS-module classes and may contain nested spans.
-    const name = scope.querySelector(SELECTORS.name);
+    const name = scope.querySelector(SELECTORS.name) || scope.querySelector("a[class*='file-name'], [class*='file-path'], [class*='filePath']");
     if (name) {
       // The accessible rename label contains the destination path.
       const rename = clean(name.querySelector(".sr-only")?.textContent);
@@ -49,6 +49,12 @@
   }
   function findFiles(document) {
     const candidates = new Set(document.querySelectorAll(SELECTORS.files));
+    // React/GitHub can render a file header without the targetable wrapper class.
+    // Start from every known header and climb to the nearest complete file card.
+    for (const header of document.querySelectorAll(SELECTORS.header)) {
+      const card = header.closest("div[id^='diff-'], [class*='Diff-module__diffTargetable'], [data-testid='diff-file'], [data-testid='diff-file-container'], .file.js-file");
+      if (card) candidates.add(card);
+    }
     for (const node of document.querySelectorAll(SELECTORS.targets)) {
       if (node.querySelector(SELECTORS.header)) candidates.add(node);
     }

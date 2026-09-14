@@ -110,11 +110,7 @@
         setStatus("Diff não identificado. A página foi mantida intacta; aguarde o carregamento ou desative o modo.");
         return;
       }
-      remember(root, "prco-root");
-      for (let parent = root.parentElement; parent; parent = parent.parentElement) {
-        remember(parent, "prco-ancestor");
-        if (parent === document.body) break;
-      }
+      // Apply the filter to file cards only. Do not hide GitHub's ancestor tree.
       let hidden = 0;
       let unknown = 0;
       for (const file of files) {
