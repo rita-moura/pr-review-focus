@@ -4,12 +4,8 @@
   globalThis.__prCodeOnlyLoaded = true;
   const { classifyFile, isPullRequestFiles } = globalThis.PRCodeOnlyRules;
   const STORAGE_KEY = "prCodeOnlyOptions";
-  // Centralized adapters. GitHub can change these; see README troubleshooting.
-  const SELECTORS = {
-    files: ".file.js-file, .js-file[data-path], [data-testid='diff-file'], [data-testid='diff-file-container']",
-    roots: "#files, [data-testid='diff-viewer'], [data-testid='files-changed']",
-    path: "[data-path], [data-file-path], .file-info a[title], [data-testid='file-name']"
-  };
+  const { filename, findFiles, findRoot } = globalThis.PRCodeOnlyDOM;
+  const VERSION = chrome.runtime.getManifest().version;
   let options = { enabled: false, filterFiles: true, hideComments: true };
   let host, toggle, filter, comments, status;
   let timer = null;
@@ -28,30 +24,8 @@
     }
     marked.clear();
   }
-  function filename(file) {
-    const ownPath = file.getAttribute("data-path") || file.getAttribute("data-file-path");
-    if (ownPath) return ownPath;
-    const node = file.querySelector(SELECTORS.path);
-    if (!node) return "";
-    return node.getAttribute("data-path") || node.getAttribute("data-file-path") ||
-      node.getAttribute("title") || node.textContent.trim();
-  }
-  function findFiles() {
-    const nodes = [...document.querySelectorAll(SELECTORS.files)];
-    // Prefer outer file cards and never process one file twice.
-    return nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)));
-  }
-  function findRoot(files) {
-    const explicit = [...document.querySelectorAll(SELECTORS.roots)]
-      .find(node => files.every(file => node.contains(file)));
-    if (explicit) return explicit;
-    if (files.length === 1) return files[0];
-    let common = files[0]?.parentElement;
-    while (common && !files.every(file => common.contains(file))) common = common.parentElement;
-    return common && common !== document.body && common !== document.documentElement ? common : null;
-  }
   function setStatus(message) {
-    status.textContent = message + (storageWarning ? " Preferências não salvas; recarregue a aba." : "");
+    status.textContent = "v" + VERSION + " · " + message + (storageWarning ? " Preferências não salvas; recarregue a aba." : "");
   }
   function persist() {
     chrome.storage.local.set({ [STORAGE_KEY]: options }).catch(() => {
@@ -67,7 +41,7 @@
     const style = document.createElement("style");
     style.textContent = [
       ":host { font: 13px/1.4 system-ui, sans-serif; color-scheme: light dark; }",
-      "section { background: #161b22; color: #f0f6fc; border: 1px solid #57606a; border-radius: 10px; padding: 12px; box-shadow: 0 4px 20px #0005; max-width: 380px; }",
+      "section { font: 13px/1.4 system-ui, sans-serif; background: #161b22; color: #f0f6fc; border: 1px solid #57606a; border-radius: 10px; padding: 12px; box-shadow: 0 4px 20px #0005; max-width: 380px; }",
       "button { background: #238636; color: white; border: 1px solid #3fb950; border-radius: 6px; padding: 7px 10px; cursor: pointer; font: inherit; }",
       "button:focus-visible, input:focus-visible { outline: 3px solid #58a6ff; outline-offset: 3px; }",
       "label { display: block; margin-top: 8px; cursor: pointer; }",
@@ -107,7 +81,10 @@
     document.body.append(host);
   }
   function observe() {
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ["data-path", "data-file-path", "title", "id"]
+    });
   }
   function apply() {
     timer = null;
@@ -127,8 +104,8 @@
         setStatus("Modo normal. Ative para focar nos diffs.");
         return;
       }
-      const files = findFiles();
-      const root = findRoot(files);
+      const files = findFiles(document);
+      const root = findRoot(document, files);
       if (!files.length || !root) {
         setStatus("Diff não identificado. A página foi mantida intacta; aguarde o carregamento ou desative o modo.");
         return;

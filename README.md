@@ -4,7 +4,7 @@ Extensão privada do Chrome para focar nas alterações de código em Pull Reque
 
 ## Estado do projeto
 
-Versão inicial **0.1.0**, sem dependências e sem publicação na Chrome Web Store.
+Versão **0.1.1**, sem dependências e sem publicação na Chrome Web Store.
 A lógica de classificação e de rotas foi verificada; a interface ainda precisa de teste
 manual no Chrome em um PR real. O GitHub pode variar a estrutura do diff entre contas
 e versões: esta versão não promete compatibilidade com todas essas interfaces.
@@ -82,9 +82,11 @@ Não há detecção universal de arquivos gerados nem lista configurável pela i
 
 - `manifest.json`: Manifest V3 e registro dos scripts.
 - `rules.js`: classificação de arquivos e reconhecimento de rotas.
-- `content.js`: interface, adaptação ao DOM e restauração.
+- `dom.js`: seletores e leitura de arquivos nas interfaces antiga e React (`/changes`).
+- `content.js`: interface e restauração.
 - `styles.css`: estilos limitados ao modo ativo.
 - `tests/rules.test.cjs`: testes das funções puras.
+- `tests/dom.test.cjs`: regressões com uma árvore DOM simulada; não substituem teste no navegador.
 
 Com Node.js 18 ou superior, sem instalar dependências:
 
@@ -113,8 +115,33 @@ e [carregar uma extensão local](https://developer.chrome.com/docs/extensions/ge
 
 Desative o foco pelo botão ou Esc. Se necessário, desative a extensão e recarregue a página.
 Os seletores de arquivos e da área de diff estão centralizados em SELECTORS,
-no início de content.js. Os seletores de comentários ficam em styles.css.
+no arquivo dom.js. Os seletores de comentários ficam em styles.css.
 Eles devem ser ajustados com base no DOM real da sua interface.
 
 Não foram executados testes visuais de navegador nesta preparação.
 Não publique capturas ou HTML com código privado para relatar um problema.
+
+
+## Atualização 0.1.1
+
+Corrige a ausência de detecção dos cartões React na tela /changes.
+A detecção agora contempla as classes de arquivo e cabeçalho do GitHub, além de
+alvos diff-* que contenham um cabeçalho de arquivo. Lê o nome no cabeçalho mesmo
+quando o conteúdo está recolhido ou mostra Load Diff. Remove marcas direcionais
+invisíveis do nome e usa o destino na descrição acessível de renomeações.
+Uma falha na identificação continua deixando o arquivo/página visível.
+
+Os padrões DOM foram conferidos no código público do
+[Refined GitHub](https://github.com/refined-github/refined-github/tree/main/source/features),
+em especial batch-mark-files-as-viewed, actionable-pr-view-file e restore-file.
+Não foi acessado o conteúdo do PR privado mostrado na captura.
+
+Para atualizar a instalação por ZIP:
+
+1. Baixe o ZIP atual e extraia em uma pasta separada.
+2. Copie os arquivos extraídos **para dentro da pasta que o Chrome já carrega**,
+   substituindo os antigos e incluindo o novo dom.js.
+3. Em chrome://extensions/, clique no botão de recarregar da extensão.
+4. Confira a versão **0.1.1** e recarregue também a aba do PR.
+
+Apenas baixar outro ZIP ou recarregar a extensão sem atualizar a pasta não instala a correção.
