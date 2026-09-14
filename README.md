@@ -150,3 +150,8 @@ Apenas baixar outro ZIP ou recarregar a extensão sem atualizar a pasta não ins
 ## Atualização 0.1.3
 
 Corrige PRs com diff virtualizado: a extensão também examina as linhas da árvore lateral (File Tree) e usa um fallback seguro para reconhecer extensões no cabeçalho quando o GitHub não expõe `data-path` ou a classe esperada. Assim documentos como `.md` são ocultados mesmo antes de todos os diffs serem renderizados.
+
+
+## Atualização 0.1.4
+
+A versão usa também os links `#diff-...` da árvore lateral do GitHub. Isso é necessário porque a interface atual virtualiza os cartões do diff e pode manter apenas um cartão no DOM. Os itens da árvore são filtrados pelo caminho/extensão mesmo quando o conteúdo do arquivo ainda não foi carregado.

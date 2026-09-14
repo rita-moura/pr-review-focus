@@ -15,7 +15,8 @@
     path: "[data-path], [data-file-path]",
     legacyName: ".file-info a[title], [data-testid='file-name']",
     headerLink: "[class*='file-path-section'] a",
-    treeRows: "ul[aria-label='File Tree'] li, [class*='file-tree-row'], [data-testid='file-tree-row']"
+    treeRows: "ul[aria-label='File Tree'] li, [class*='file-tree-row'], [data-testid='file-tree-row']",
+    treeLinks: "a[href^='#diff-'], a[href*='#diff-'], a[href*='%23diff-']"
   });
   function clean(value) {
     return (value || "").replace(/[\u200e\u200f]/g, "").trim();
@@ -24,6 +25,11 @@
     return clean(node.getAttribute("data-path") || node.getAttribute("data-file-path"));
   }
   function filename(file) {
+    if (file.matches && file.matches("a[href*='#diff-'], a[href*='%23diff-']")) {
+      const direct = clean(file.getAttribute("data-path") || file.getAttribute("title") || file.textContent);
+      const token = direct.match(/[^\s]+\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|avif|json|ya?ml|toml|rb|py|js|jsx|ts|tsx|css|scss|html|sql|go|rs|java|kt|lock)(?:\s|$)/i);
+      return token ? clean(token[0]) : direct;
+    }
     const ownPath = pathAttribute(file);
     if (ownPath) return ownPath;
     const header = file.querySelector(SELECTORS.header);
@@ -66,6 +72,10 @@
     // The left file tree is not the diff card, but filtering it prevents
     // non-code files from remaining visible while the diff is virtualized.
     for (const row of document.querySelectorAll(SELECTORS.treeRows)) candidates.add(row);
+    for (const link of document.querySelectorAll(SELECTORS.treeLinks)) {
+      const row = link.closest("li, [class*='file-tree-row'], [data-testid='file-tree-row'], [role='treeitem']");
+      candidates.add(row || link);
+    }
     const nodes = [...candidates];
     // The wrapper and its nested card can both match: count/hide each file once.
     return nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)));
