@@ -14,7 +14,8 @@
     name: "[class*='DiffFileHeader-module__file-name'] code, [class*='DiffFileHeader-module__file-name']",
     path: "[data-path], [data-file-path]",
     legacyName: ".file-info a[title], [data-testid='file-name']",
-    headerLink: "[class*='file-path-section'] a"
+    headerLink: "[class*='file-path-section'] a",
+    treeRows: "ul[aria-label='File Tree'] li, [class*='file-tree-row'], [data-testid='file-tree-row']"
   });
   function clean(value) {
     return (value || "").replace(/[\u200e\u200f]/g, "").trim();
@@ -45,7 +46,11 @@
     const legacy = scope.querySelector(SELECTORS.legacyName);
     if (legacy) return clean(legacy.getAttribute("title") || legacy.textContent);
     const link = scope.querySelector(SELECTORS.headerLink);
-    return link ? clean(link.getAttribute("title") || link.textContent) : "";
+    if (link) return clean(link.getAttribute("title") || link.textContent);
+    // Last-resort adapter for GitHub's virtualized React headers.
+    const text = clean(scope.textContent);
+    const match = text.match(/(?:^|\s)([^\s]+\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|json|ya?ml|toml|rb|py|js|jsx|ts|tsx|css|scss|html|sql|go|rs|java|kt))(?:\s|$)/i);
+    return match ? clean(match[1]) : "";
   }
   function findFiles(document) {
     const candidates = new Set(document.querySelectorAll(SELECTORS.files));
@@ -58,6 +63,9 @@
     for (const node of document.querySelectorAll(SELECTORS.targets)) {
       if (node.querySelector(SELECTORS.header)) candidates.add(node);
     }
+    // The left file tree is not the diff card, but filtering it prevents
+    // non-code files from remaining visible while the diff is virtualized.
+    for (const row of document.querySelectorAll(SELECTORS.treeRows)) candidates.add(row);
     const nodes = [...candidates];
     // The wrapper and its nested card can both match: count/hide each file once.
     return nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)));

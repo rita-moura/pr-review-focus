@@ -145,3 +145,8 @@ Para atualizar a instalação por ZIP:
 4. Confira a versão **0.1.1** e recarregue também a aba do PR.
 
 Apenas baixar outro ZIP ou recarregar a extensão sem atualizar a pasta não instala a correção.
+
+
+## Atualização 0.1.3
+
+Corrige PRs com diff virtualizado: a extensão também examina as linhas da árvore lateral (File Tree) e usa um fallback seguro para reconhecer extensões no cabeçalho quando o GitHub não expõe `data-path` ou a classe esperada. Assim documentos como `.md` são ocultados mesmo antes de todos os diffs serem renderizados.
