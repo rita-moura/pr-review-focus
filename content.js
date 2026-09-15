@@ -89,15 +89,23 @@
   }
 
   function findNativeSummary() {
-    const candidates = document.querySelectorAll("span,div,dd");
-    for (const node of candidates) {
-      const text = node.textContent.trim();
-      if (!/^\+\s*[\d,.]+\s*[−-]\s*[\d,.]+$/.test(text)) continue;
+    const pattern = /\+\s*[\d\s,.]+\s*[-−–—]\s*[\d\s,.]+/;
+    const candidates = [];
+    for (const node of document.querySelectorAll("span,div,dd,dt,output,b,strong")) {
+      const text = node.textContent.replace(/\u00a0/g, " ").trim();
+      if (!pattern.test(text)) continue;
+      if (node.closest("[id^='diff-'], .file-header, [class*='DiffFile'], [class*='diff-file']")) continue;
+      const childMatch = [...node.children].some(child => pattern.test(child.textContent.replace(/\u00a0/g, " ").trim()));
+      if (childMatch) continue; // usa o menor elemento que contém o resumo
       const rect = node.getBoundingClientRect();
-      if (rect.top > 0 && rect.top < 330 &&
-          !node.closest("[id^='diff-'], .file-header, [class*='DiffFile'], [class*='diff-file']")) return node;
+      candidates.push({ node, top: rect.top });
     }
-    return null;
+    candidates.sort((a, b) => {
+      const aTop = a.top >= 0 ? a.top : Number.MAX_SAFE_INTEGER;
+      const bTop = b.top >= 0 ? b.top : Number.MAX_SAFE_INTEGER;
+      return aTop - bTop;
+    });
+    return candidates[0]?.node || null;
   }
 
   function updateStats(entries) {
