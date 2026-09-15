@@ -4,7 +4,7 @@ Extensão privada do Chrome para focar nas alterações de código em Pull Reque
 
 ## Estado do projeto
 
-Versão **0.2.1**, sem dependências e sem publicação na Chrome Web Store.
+Versão **0.3.0**, sem dependências e sem publicação na Chrome Web Store.
 A lógica de classificação e de rotas foi verificada; a interface ainda precisa de teste
 manual no Chrome em um PR real. O GitHub pode variar a estrutura do diff entre contas
 e versões: esta versão não promete compatibilidade com todas essas interfaces.
@@ -15,7 +15,7 @@ e versões: esta versão não promete compatibilidade com todas essas interfaces
 - Oculta elementos externos à área do diff quando ela é reconhecida.
 - Opção para esconder arquivos que não são código; os comentários do GitHub permanecem visíveis.
 - Mantém nomes dos arquivos, numeração, linhas removidas/adicionadas e contexto do diff.
-- Contador dos arquivos **carregados no DOM**, não necessariamente de todos os arquivos do PR.
+- Contador das linhas dos diffs de código **carregados no DOM**; o GitHub pode carregar cartões sob demanda.
 - Preferências locais ao perfil do Chrome e compartilhadas entre suas abas.
 - Reaplica o filtro em atualizações dinâmicas e navegação interna.
 - Tecla **Esc** para sair do modo de foco.
@@ -159,12 +159,12 @@ A versão usa também os links `#diff-...` da árvore lateral do GitHub. Isso é
 
 ## Versão 0.2.0 — plano implementado
 
-A versão 0.2 separa a árvore lateral dos cartões do diff, preserva comentários do GitHub e calcula uma contagem de alterações de código pelo patch completo do PR. O indicador próprio mostra `Código: +X -Y`; o contador original do GitHub continua disponível para comparação. Arquivos não código são ocultados somente quando o modo está ativo.
+A versão 0.3 separa a árvore lateral dos cartões do diff, preserva comentários do GitHub e conta as linhas dos cartões de código carregados diretamente no DOM. O indicador próprio mostra `Código carregado: +X -Y` e substitui temporariamente o resumo nativo; arquivos não código são ocultados somente quando o modo está ativo.
 
 
 ## Versão 0.2.0 — filtro e contador de código
 
-A extensão agora separa a árvore lateral dos cartões do diff, sem depender de um contêiner comum no DOM. Arquivos não código são ocultados diretamente; comentários do GitHub não são ocultados. O patch completo do PR é analisado localmente pelo navegador para mostrar um indicador próprio `Código: +X -Y`, sem substituir o contador nativo do GitHub. Se o GitHub bloquear o patch, o filtro visual continua funcionando e a contagem informa que está indisponível.
+A extensão agora separa a árvore lateral dos cartões do diff, sem depender de um contêiner comum no DOM. Arquivos não código são ocultados diretamente; comentários do GitHub não são ocultados. As linhas são contadas localmente no DOM para evitar chamadas ao endpoint `.patch` (que pode ser bloqueado por CORS). Em PRs grandes, carregue/role os cartões para atualizar a contagem.
 
 
 ## Versão 0.2.1
