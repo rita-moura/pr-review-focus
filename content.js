@@ -92,7 +92,7 @@
     const candidates = document.querySelectorAll("span,div,dd");
     for (const node of candidates) {
       const text = node.textContent.trim();
-      if (!/^\+\d+\s*-\s*\d+$/.test(text)) continue;
+      if (!/^\+\s*[\d,.]+\s*[−-]\s*[\d,.]+$/.test(text)) continue;
       const rect = node.getBoundingClientRect();
       if (rect.top > 0 && rect.top < 330 &&
           !node.closest("[id^='diff-'], .file-header, [class*='DiffFile'], [class*='diff-file']")) return node;
