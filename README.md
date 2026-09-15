@@ -170,3 +170,8 @@ A extensão agora separa a árvore lateral dos cartões do diff, sem depender de
 ## Versão 0.2.1
 
 Evita novas requisições do patch a cada mutação da página e não inclui caminhos desconhecidos na soma de código. Formatos desconhecidos permanecem visíveis, mas a contagem de código só considera extensões reconhecidas.
+
+
+## Versão 0.2.2
+
+Corrige o acesso ao patch: o GitHub redireciona o arquivo para `patch-diff.githubusercontent.com`, então a busca agora passa por um service worker com permissões restritas aos dois hosts e somente a rotas de patch de Pull Request. Adiciona também detecção de nomes exibidos como texto na árvore React. Os comentários do GitHub continuam visíveis.

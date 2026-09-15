@@ -1,11 +1,11 @@
 {
   "name": "github-pr-code-only",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "Chrome extension for focused GitHub pull request diffs.",
   "scripts": {
     "test": "node --test tests/*.test.cjs",
-    "check": "node --check rules.js && node --check dom.js && node --check patch.js && node --check content.js"
+    "check": "node --check rules.js && node --check dom.js && node --check patch.js && node --check content.js && node --check background.js"
   },
   "engines": {
     "node": ">=18"

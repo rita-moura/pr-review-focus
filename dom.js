@@ -6,8 +6,8 @@
   const clean = value => (value || "").replace(/[\u200e\u200f]/g, "").trim();
   const pathFromText = value => {
     const text = clean(value);
-    const match = text.match(/(?:^|\s)([^\s]+)\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|avif|json|ya?ml|toml|rb|py|js|jsx|ts|tsx|css|scss|html|sql|go|rs|java|kt|lock)(?=\s|$)/i);
-    return match ? clean(match[1]) : text;
+    const match = text.match(/([^\s"'<>]+)\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|avif|json|ya?ml|toml|rb|py|js|jsx|ts|tsx|css|scss|html|sql|go|rs|java|kt|lock)(?=\s|$|[),])/i);
+    return match ? clean(match[0].replace(/[),]$/, "")) : text;
   };
   function treePath(link) {
     return pathFromText(link.getAttribute("data-path") || link.getAttribute("title") ||
@@ -50,6 +50,15 @@
     for (const link of document.querySelectorAll(TREE_LINK)) {
       const row = link.closest("li, [role='treeitem'], [class*='file-tree-row'], [data-testid='file-tree-row']") || link;
       add(row, treePath(link), "tree");
+    }
+    // Current React tree variants may render file names without an anchor/hash.
+    // Match only leaf-like elements whose complete text is a filename.
+    const extension = /\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|avif|json|ya?ml|toml|rb|py|js|jsx|ts|tsx|css|scss|html|sql|go|rs|java|kt|lock)$/i;
+    for (const node of document.querySelectorAll("[role='treeitem'], [data-testid*='file'], a, button, span")) {
+      const text = clean(node.textContent);
+      if (!text || text.length > 180 || !extension.test(text)) continue;
+      const row = node.closest("li, [role='treeitem'], [class*='file-tree-row'], [data-testid='file-tree-row']") || node;
+      add(row, text, "tree");
     }
     const seen = new Set();
     for (const header of document.querySelectorAll(HEADER)) {

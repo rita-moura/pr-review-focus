@@ -26,8 +26,10 @@
     const url=patchUrl(location.pathname);if(!url){setStatus("Não foi possível localizar o patch deste PR.");return;}
     if (statsKey === url && stats?.textContent) return;
     statsKey = url;
-    try{const response=await fetch(url,{credentials:"include",headers:{accept:"text/plain"}});if(!response.ok)throw new Error("HTTP "+response.status);
-      const totals=parsePatch(await response.text(),classifyFile);stats.textContent="Código: +"+totals.code.added+" -"+totals.code.deleted+" · "+totals.codeFiles+" arquivos de código (de "+totals.files+" no PR)";
+    try{
+      const result=await chrome.runtime.sendMessage({type:"getPatch", url:new URL(url, location.origin).href});
+      if(!result?.ok) throw new Error(result?.error || "service worker não retornou o patch");
+      const totals=parsePatch(result.text,classifyFile);stats.textContent="Código: +"+totals.code.added+" -"+totals.code.deleted+" · "+totals.codeFiles+" arquivos de código (de "+totals.files+" no PR)";
     }catch(error){stats.textContent="Código: contagem indisponível (patch não acessível)";console.warn("[PR Code Only] Patch:",error);}
   }
   function apply(){

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GitHub PR Code Only",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Mostra somente alterações de arquivos de código em Pull Requests do GitHub.",
   "permissions": [
     "storage"
@@ -22,5 +22,12 @@
       ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://patch-diff.githubusercontent.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
 }
