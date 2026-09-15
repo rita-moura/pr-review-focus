@@ -65,8 +65,11 @@
       if (!entry.diffElement || seen.has(entry.diffElement) || classifyFile(entry.path) !== "code") continue;
       seen.add(entry.diffElement);
       files++;
-      for (const selector of additions) added += entry.diffElement.querySelectorAll(selector).length;
-      for (const selector of deletions) deleted += entry.diffElement.querySelectorAll(selector).length;
+      const addedNodes = new Set(), deletedNodes = new Set();
+      for (const selector of additions) entry.diffElement.querySelectorAll(selector).forEach(node => addedNodes.add(node));
+      for (const selector of deletions) entry.diffElement.querySelectorAll(selector).forEach(node => deletedNodes.add(node));
+      added += addedNodes.size;
+      deleted += deletedNodes.size;
     }
     return { added, deleted, files };
   }
@@ -148,7 +151,7 @@
     if (area === "local" && changes[KEY]) { read(changes[KEY].newValue); schedule(); }
   });
   chrome.storage.local.get(KEY).then(result => read(result[KEY])).catch(() => {}).finally(() => {
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["data-path", "data-file-path", "title", "id"] });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-path", "data-file-path", "title", "id"] });
     schedule();
   });
 })();
