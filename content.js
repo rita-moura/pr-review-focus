@@ -159,11 +159,12 @@
   const observer = new MutationObserver(() => {
     if (isPullRequestFiles(location.pathname) || marked.size || host?.isConnected) schedule();
   });
-  chrome.runtime.onMessage.addListener(message => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === "toggleCodeOnly") {
       options.enabled = !options.enabled;
       persist();
       schedule();
+      sendResponse({ enabled: options.enabled });
     }
   });
   document.addEventListener("keydown", event => {
