@@ -7,7 +7,7 @@
   const { parsePatch, patchUrl } = globalThis.PRCodeOnlyPatch;
   const KEY = "prCodeOnlyOptions";
   const options = {enabled:false, filterFiles:true};
-  let host, toggle, filter, status, stats, timer=null, marked=new Set(), previousURL=location.href;
+  let host, toggle, filter, status, stats, timer=null, marked=new Set(), previousURL=location.href, statsKey="";
   const remember=(node, cls)=>{if(node){node.classList.add(cls);marked.add(node);}};
   function restore(){document.body.classList.remove("prco-active");for(const n of marked)n.classList.remove("prco-hidden-file");marked.clear();}
   function setStatus(message){if(status)status.textContent=message;}
@@ -24,6 +24,8 @@
   function persist(){chrome.storage.local.set({[KEY]:options}).catch(()=>{});}
   async function updateStats(){
     const url=patchUrl(location.pathname);if(!url){setStatus("Não foi possível localizar o patch deste PR.");return;}
+    if (statsKey === url && stats?.textContent) return;
+    statsKey = url;
     try{const response=await fetch(url,{credentials:"include",headers:{accept:"text/plain"}});if(!response.ok)throw new Error("HTTP "+response.status);
       const totals=parsePatch(await response.text(),classifyFile);stats.textContent="Código: +"+totals.code.added+" -"+totals.code.deleted+" · "+totals.codeFiles+" arquivos de código (de "+totals.files+" no PR)";
     }catch(error){stats.textContent="Código: contagem indisponível (patch não acessível)";console.warn("[PR Code Only] Patch:",error);}

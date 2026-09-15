@@ -4,7 +4,7 @@ Extensão privada do Chrome para focar nas alterações de código em Pull Reque
 
 ## Estado do projeto
 
-Versão **0.2.0**, sem dependências e sem publicação na Chrome Web Store.
+Versão **0.2.1**, sem dependências e sem publicação na Chrome Web Store.
 A lógica de classificação e de rotas foi verificada; a interface ainda precisa de teste
 manual no Chrome em um PR real. O GitHub pode variar a estrutura do diff entre contas
 e versões: esta versão não promete compatibilidade com todas essas interfaces.
@@ -165,3 +165,8 @@ A versão 0.2 separa a árvore lateral dos cartões do diff, preserva comentári
 ## Versão 0.2.0 — filtro e contador de código
 
 A extensão agora separa a árvore lateral dos cartões do diff, sem depender de um contêiner comum no DOM. Arquivos não código são ocultados diretamente; comentários do GitHub não são ocultados. O patch completo do PR é analisado localmente pelo navegador para mostrar um indicador próprio `Código: +X -Y`, sem substituir o contador nativo do GitHub. Se o GitHub bloquear o patch, o filtro visual continua funcionando e a contagem informa que está indisponível.
+
+
+## Versão 0.2.1
+
+Evita novas requisições do patch a cada mutação da página e não inclui caminhos desconhecidos na soma de código. Formatos desconhecidos permanecem visíveis, mas a contagem de código só considera extensões reconhecidas.
