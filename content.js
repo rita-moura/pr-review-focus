@@ -66,10 +66,24 @@
       seen.add(entry.diffElement);
       files++;
       const addedNodes = new Set(), deletedNodes = new Set();
-      for (const selector of additions) entry.diffElement.querySelectorAll(selector).forEach(node => addedNodes.add(node));
-      for (const selector of deletions) entry.diffElement.querySelectorAll(selector).forEach(node => deletedNodes.add(node));
-      added += addedNodes.size;
-      deleted += deletedNodes.size;
+      let root = entry.diffElement;
+      // React pode colocar o cabeçalho em um irmão do conteúdo; subimos até o cartão que contém as linhas.
+      for (let level = 0; level < 6 && root; level++, root = root.parentElement) {
+        for (const selector of additions) root.querySelectorAll(selector).forEach(node => addedNodes.add(node));
+        for (const selector of deletions) root.querySelectorAll(selector).forEach(node => deletedNodes.add(node));
+        if (addedNodes.size || deletedNodes.size) break;
+      }
+      if (addedNodes.size || deletedNodes.size) {
+        added += addedNodes.size;
+        deleted += deletedNodes.size;
+      } else {
+        // Fallback para diffs recolhidos: o cabeçalho mostra a soma daquele arquivo.
+        const match = (entry.diffElement.textContent || "").match(/\+(\d+)\s*-(\d+)/);
+        if (match) {
+          added += Number(match[1]);
+          deleted += Number(match[2]);
+        }
+      }
     }
     return { added, deleted, files };
   }
