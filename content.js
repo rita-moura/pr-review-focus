@@ -159,6 +159,13 @@
   const observer = new MutationObserver(() => {
     if (isPullRequestFiles(location.pathname) || marked.size || host?.isConnected) schedule();
   });
+  chrome.runtime.onMessage.addListener(message => {
+    if (message?.type === "toggleCodeOnly") {
+      options.enabled = !options.enabled;
+      persist();
+      schedule();
+    }
+  });
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && options.enabled) { options.enabled = false; persist(); schedule(); }
   });
