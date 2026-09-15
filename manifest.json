@@ -1,25 +1,26 @@
 {
+  "manifest_version": 3,
+  "name": "GitHub PR Code Only",
+  "version": "0.2.0",
+  "description": "Mostra somente alterações de arquivos de código em Pull Requests do GitHub.",
+  "permissions": [
+    "storage"
+  ],
   "content_scripts": [
     {
-      "css": [
-        "styles.css"
+      "matches": [
+        "https://github.com/*"
       ],
       "js": [
         "rules.js",
         "dom.js",
+        "patch.js",
         "content.js"
       ],
-      "matches": [
-        "https://github.com/*"
+      "css": [
+        "styles.css"
       ],
       "run_at": "document_idle"
     }
-  ],
-  "description": "Modo de foco nos diffs de Pull Requests, com filtro opcional de arquivos e comentários.",
-  "manifest_version": 3,
-  "name": "GitHub PR Code Only",
-  "permissions": [
-    "storage"
-  ],
-  "version": "0.1.4"
+  ]
 }
