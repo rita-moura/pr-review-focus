@@ -33,6 +33,7 @@
   }
   function collectFiles(document) {
     const byPath = new Map();
+    const treeByDiffId = new Map();
     const unknown = [];
     const add = (element, path, source) => {
       const normalized = clean(path);
@@ -49,7 +50,11 @@
     };
     for (const link of document.querySelectorAll(TREE_LINK)) {
       const row = link.closest("li, [role='treeitem'], [class*='file-tree-row'], [data-testid='file-tree-row']") || link;
-      add(row, treePath(link), "tree");
+      const path = treePath(link);
+      add(row, path, "tree");
+      const href = link.getAttribute("href") || "";
+      const match = href.match(/#(?:%23)?(diff-[^/?#]+)/i);
+      if (match && path) treeByDiffId.set(match[1].toLowerCase(), path);
     }
     // Current React tree variants may render file names without an anchor/hash.
     // Match only leaf-like elements whose complete text is a filename.
@@ -63,10 +68,18 @@
     const seen = new Set();
     for (const header of document.querySelectorAll(HEADER)) {
       const card = header.closest(CARD);
-      if (card && !seen.has(card)) { seen.add(card); add(card, cardPath(card), "diff"); }
+      if (card && !seen.has(card)) {
+        seen.add(card);
+        const mapped = card.id && treeByDiffId.get(card.id.toLowerCase());
+        add(card, mapped || cardPath(card), "diff");
+      }
     }
     for (const card of document.querySelectorAll(".file.js-file[data-path], [data-testid='diff-file'], [data-testid='diff-file-container']")) {
-      if (!seen.has(card)) { seen.add(card); add(card, cardPath(card), "diff"); }
+      if (!seen.has(card)) {
+        seen.add(card);
+        const mapped = card.id && treeByDiffId.get(card.id.toLowerCase());
+        add(card, mapped || cardPath(card), "diff");
+      }
     }
     return [...byPath.values()].concat(unknown);
   }
