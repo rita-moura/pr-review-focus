@@ -8,18 +8,17 @@
   const KEY = "prCodeOnlyOptions";
   const options = { enabled: false, filterFiles: true };
   let host, toggle, filter, status, stats, timer = null;
-  let marked = new Set(), previousURL = location.href, nativeSummary = null;
+  let marked = new Set(), previousURL = location.href, nativeSummaryNodes = [];
 
   const remember = (node, cls) => { if (node) { node.classList.add(cls); marked.add(node); } };
   function restore() {
     document.body.classList.remove("prco-active");
     for (const node of marked) node.classList.remove("prco-hidden-file");
     marked.clear();
-    if (nativeSummary?.isConnected && nativeSummary.dataset.prcoOriginal !== undefined) {
-      nativeSummary.textContent = nativeSummary.dataset.prcoOriginal;
-      delete nativeSummary.dataset.prcoOriginal;
+    for (const item of nativeSummaryNodes) {
+      if (item.node?.isConnected) item.node.nodeValue = item.original;
     }
-    nativeSummary = null;
+    nativeSummaryNodes = [];
   }
   function setStatus(message) { if (status) status.textContent = message; }
 
@@ -88,24 +87,33 @@
     return { added, deleted, files };
   }
 
-  function findNativeSummary() {
-    const pattern = /\+\s*[\d\s,.]+\s*[-−–—]\s*[\d\s,.]+/;
-    const candidates = [];
-    for (const node of document.querySelectorAll("span,div,dd,dt,output,b,strong")) {
-      const text = node.textContent.replace(/\u00a0/g, " ").trim();
-      if (!pattern.test(text)) continue;
-      if (node.closest("[id^='diff-'], .file-header, [class*='DiffFile'], [class*='diff-file']")) continue;
-      const childMatch = [...node.children].some(child => pattern.test(child.textContent.replace(/\u00a0/g, " ").trim()));
-      if (childMatch) continue; // usa o menor elemento que contém o resumo
-      const rect = node.getBoundingClientRect();
-      candidates.push({ node, top: rect.top });
+  function replaceNativeSummary(added, deleted) {
+    const addPattern = /^\+\s*[\d\s,.]+$/;
+    const delPattern = /^[-−–—]\s*[\d\s,.]+$/;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let addNode = null, delNode = null, node;
+    while ((node = walker.nextNode())) {
+      const text = node.nodeValue.replace(/\u00a0/g, " ").trim();
+      const parent = node.parentElement;
+      if (!parent || parent.closest("#prco-toolbar, [id^='diff-'], .file-header, [class*='DiffFile'], [class*='diff-file']")) continue;
+      const top = parent.getBoundingClientRect().top;
+      if (top < 0 || top > 330) continue;
+      if (!addNode && addPattern.test(text)) addNode = node;
+      if (!delNode && delPattern.test(text)) delNode = node;
+      if (addNode && delNode) break;
     }
-    candidates.sort((a, b) => {
-      const aTop = a.top >= 0 ? a.top : Number.MAX_SAFE_INTEGER;
-      const bTop = b.top >= 0 ? b.top : Number.MAX_SAFE_INTEGER;
-      return aTop - bTop;
-    });
-    return candidates[0]?.node || null;
+    for (const item of nativeSummaryNodes) {
+      if (item.node?.isConnected) item.node.nodeValue = item.original;
+    }
+    nativeSummaryNodes = [];
+    if (addNode) {
+      nativeSummaryNodes.push({ node: addNode, original: addNode.nodeValue });
+      addNode.nodeValue = "+" + added;
+    }
+    if (delNode) {
+      nativeSummaryNodes.push({ node: delNode, original: delNode.nodeValue });
+      delNode.nodeValue = "-" + deleted;
+    }
   }
 
   function updateStats(entries) {
@@ -113,14 +121,7 @@
     const value = "Código carregado: +" + totals.added + " -" + totals.deleted +
       " · " + totals.files + " arquivos";
     if (stats) stats.textContent = value;
-    const summary = findNativeSummary();
-    if (summary && summary.dataset.prcoOriginal === undefined) {
-      summary.dataset.prcoOriginal = summary.textContent;
-      summary.textContent = "+ " + totals.added + " -" + totals.deleted + " (código)";
-      nativeSummary = summary;
-    } else if (nativeSummary?.isConnected) {
-      nativeSummary.textContent = "+ " + totals.added + " -" + totals.deleted + " (código)";
-    }
+    replaceNativeSummary(totals.added, totals.deleted);
   }
 
   function apply() {
