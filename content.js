@@ -3,7 +3,7 @@
   if (globalThis.__prCodeOnlyLoaded) return;
   globalThis.__prCodeOnlyLoaded = true;
   const { classifyFile, isPullRequestFiles } = globalThis.PRCodeOnlyRules;
-  const { collectFiles, cardPath, fileContainer } = globalThis.PRCodeOnlyDOM;
+  const { collectFiles, nonCodeTargets } = globalThis.PRCodeOnlyDOM;
   let enabled = false, mode = "code", timer = null, previousURL = location.href;
   let modePicker = null, modeButtons = null;
   let stopped = false, navigationTimer = null;
@@ -13,7 +13,7 @@
   const { filterDiff, updateCounters, showOverallCounter, readFileChangeTotals } = globalThis.PRCodeOnlyDiff;
   const observer = new MutationObserver(schedule);
   function observe() {
-    if (stopped) return;
+    if (stopped || !enabled) return;
     observer.observe(document.body, { childList: true, subtree: true, characterData: true,
       attributes: true, attributeFilter: ["data-path", "data-file-path", "title", "id", "aria-label", "href"] });
   }
@@ -27,8 +27,8 @@
     for (const counter of counters) counter.remove();
     counters.length = 0;
     for (const edit of summaryEdits) {
-      if (edit.node?.isConnected) edit.node.nodeValue = edit.original;
-      if (edit.element?.isConnected) edit.element.textContent = edit.originalText;
+      if (edit.node?.isConnected && edit.node.nodeValue === edit.replacement) edit.node.nodeValue = edit.original;
+      if (edit.element?.isConnected && edit.element.textContent === edit.replacement) edit.element.textContent = edit.originalText;
     }
     summaryEdits.length = 0;
   }
@@ -44,7 +44,8 @@
       modePicker.setAttribute("role", "group");
       modePicker.setAttribute("aria-label", "Modo de revisão");
       modeButtons = {};
-      for (const [value, label] of [["code", "Só código"], ["files", "Arquivos de código"]]) {
+      modePicker.title = "Os contadores consideram apenas os diffs carregados.";
+      for (const [value, label] of [["code", "Código sem comentários"], ["files", "Arquivos de código"]]) {
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = label;
@@ -90,51 +91,6 @@
         .catch(connectionFailed);
     } catch (error) { connectionFailed(error); }
   }
-  function hideNonCodeTreeRows() {
-    for (const row of document.querySelectorAll("[role='treeitem'], [data-tree-entry-type='file'], [data-testid='file-tree-row']")) {
-      if (row.querySelector("[role='treeitem'], [data-tree-entry-type='file']")) continue;
-      const type = row.getAttribute("data-file-type");
-      const path = row.getAttribute("data-path") || row.getAttribute("data-file-path") ||
-        row.querySelector("[data-filterable-item-text]")?.textContent ||
-        row.querySelector("a[title]")?.getAttribute("title") ||
-        row.querySelector("a[href*='#diff-']")?.textContent || row.textContent;
-      const filename = (path || "").trim().match(/[^\s<>]+\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|avif|lock|snap)(?=\s|$)/i)?.[0];
-      if (classifyFile(filename || (type ? "file" + type : path)) === "non-code") hide(row);
-    }
-  }
-  function hideNonCodeDiffLinks() {
-    for (const link of document.querySelectorAll("a[href*='#diff-'], a[href*='%23diff-']")) {
-      const candidates = [link.getAttribute("data-path"), link.getAttribute("title"),
-        link.getAttribute("aria-label"), link.textContent.trim()];
-      if (!candidates.some(path => classifyFile(path) === "non-code")) continue;
-      const row = link.closest("li, [role='treeitem'], [data-tree-entry-type='file'], [data-testid='file-tree-row']");
-      hide(row || link);
-      const hash = (link.getAttribute("href") || "").match(/(?:#|%23)(diff-[a-f0-9]{6,64})(?:$|[?&])/i)?.[1];
-      if (!hash) continue;
-      const target = document.getElementById?.(hash);
-      if (!target) continue;
-      const header = target.querySelector(".file-header, [class*='DiffFileHeader-module__diff-file-header'], [class*='Diff-module__diffHeaderWrapper']") ||
-        target.closest(".file-header, [class*='DiffFileHeader-module__diff-file-header'], [class*='Diff-module__diffHeaderWrapper']");
-      const container = (header && fileContainer(header)) ||
-        target.closest("[data-testid='diff-file-container'], [data-testid='diff-file'], .file.js-file, [class*='DiffFile-module__']") || target;
-      hide(container);
-    }
-  }
-  function hideNonCodeCards() {
-    const headers = ".file-header, [class*='DiffFileHeader-module__diff-file-header'], [class*='Diff-module__diffHeaderWrapper']";
-    for (const header of document.querySelectorAll(headers)) {
-      const card = fileContainer(header);
-      if (!card) continue;
-      let path = cardPath(card);
-      if (classifyFile(path) !== "non-code") {
-        for (const named of header.querySelectorAll("[title], [aria-label]")) {
-          const candidate = named.getAttribute("title") || named.getAttribute("aria-label");
-          if (classifyFile(candidate) === "non-code") { path = candidate; break; }
-        }
-      }
-      if (classifyFile(path) === "non-code") hide(card);
-    }
-  }
   function apply() {
     if (stopped) return;
     if (timer !== null) clearTimeout(timer);
@@ -147,15 +103,7 @@
       const entries = collectFiles(document);
       const cards = entries.map(entry => entry.diffElement).filter(Boolean);
       if (!cards.length) { removeModePicker(); report(true); return; }
-      for (const entry of entries) {
-        if (classifyFile(entry.path) === "non-code") {
-          hide(entry.treeElement);
-          hide(entry.diffElement);
-        }
-      }
-      hideNonCodeTreeRows();
-      hideNonCodeCards();
-      hideNonCodeDiffLinks();
+      for (const target of nonCodeTargets(document, classifyFile, entries)) hide(target);
       showModePicker();
       const totals = { added: 0, deleted: 0 };
       for (const entry of entries) {
@@ -174,7 +122,7 @@
       enabled = false;
       removeModePicker();
       report(true);
-      console.warn("[PR Code Only] Página restaurada após falha no filtro.", error);
+      console.warn("[PR Review Focus] Página restaurada após falha no filtro.", error);
     } finally { observe(); }
   }
   function schedule() {
@@ -182,11 +130,11 @@
   }
   function onMessage(message, sender, reply) {
     if (stopped) return;
-    if (message?.type !== "toggleCodeOnly") return;
-    if (!isPullRequestFiles(location.pathname)) { reply({ enabled: false }); return; }
-    enabled = !enabled;
+    if (message?.type !== "toggleCodeOnly" && message?.type !== "activateCodeOnly") return;
+    if (!isPullRequestFiles(location.pathname)) { reply({ enabled: false, ready: true }); return; }
+    enabled = message.type === "activateCodeOnly" ? true : !enabled;
     apply();
-    reply({ enabled, mode });
+    reply({ enabled, mode, ready: !stopped });
   }
   chrome.runtime.onMessage.addListener(onMessage);
   function onKeydown(event) {

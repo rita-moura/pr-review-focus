@@ -57,6 +57,13 @@
     }
     return initial;
   }
+  function mappedOrDetectedPath(mapped, detected) {
+    if (!mapped || !detected) return mapped || detected;
+    const mappedName = mapped.split("/").pop();
+    const detectedName = detected.split("/").pop();
+    if (mappedName === detectedName || !/\.[a-z0-9]+$/i.test(detectedName)) return mapped;
+    return detected;
+  }
   function collectFiles(document) {
     const byPath = new Map();
     const treeByDiffId = new Map();
@@ -101,17 +108,67 @@
       if (card && !seen.has(card)) {
         seen.add(card);
         const mapped = card.id && treeByDiffId.get(card.id.toLowerCase());
-        add(card, mapped || cardPath(card), "diff");
+        add(card, mappedOrDetectedPath(mapped, cardPath(card)), "diff");
       }
     }
     for (const card of document.querySelectorAll(".file.js-file[data-path], [data-testid='diff-file'], [data-testid='diff-file-container']")) {
       if (!seen.has(card) && ![...seen].some(parent => parent.contains(card))) {
         seen.add(card);
         const mapped = card.id && treeByDiffId.get(card.id.toLowerCase());
-        add(card, mapped || cardPath(card), "diff");
+        add(card, mappedOrDetectedPath(mapped, cardPath(card)), "diff");
       }
     }
     return [...byPath.values()].concat(unknown);
+  }
+  function nonCodeTargets(document, classifyFile, entries = collectFiles(document)) {
+    const targets = new Set();
+    for (const entry of entries) {
+      if (classifyFile(entry.path) !== "non-code") continue;
+      if (entry.treeElement) targets.add(entry.treeElement);
+      if (entry.diffElement) targets.add(entry.diffElement);
+    }
+
+    // GitHub sometimes renders a file-tree leaf without a link or a complete path.
+    for (const row of document.querySelectorAll("[role='treeitem'], [data-tree-entry-type='file'], [data-testid='file-tree-row']")) {
+      if (row.querySelector("[role='treeitem'], [data-tree-entry-type='file']")) continue;
+      const type = row.getAttribute("data-file-type");
+      const path = row.getAttribute("data-path") || row.getAttribute("data-file-path") ||
+        row.querySelector("[data-filterable-item-text]")?.textContent ||
+        row.querySelector("a[title]")?.getAttribute("title") ||
+        row.querySelector("a[href*='#diff-']")?.textContent || row.textContent;
+      const filename = (path || "").trim().match(/[^\s<>]+\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|avif|lock|snap)(?=\s|$)/i)?.[0];
+      if (classifyFile(filename || (type ? "file" + type : path)) === "non-code") targets.add(row);
+    }
+
+    for (const header of document.querySelectorAll(HEADER)) {
+      const card = fileContainer(header);
+      if (!card) continue;
+      let path = cardPath(card);
+      if (classifyFile(path) === "unknown") {
+        for (const named of header.querySelectorAll("[title], [aria-label]")) {
+          const candidate = named.getAttribute("title") || named.getAttribute("aria-label");
+          if (classifyFile(candidate) === "non-code") { path = candidate; break; }
+        }
+      }
+      if (classifyFile(path) === "non-code") targets.add(card);
+    }
+
+    for (const link of document.querySelectorAll("a[href*='#diff-'], a[href*='%23diff-']")) {
+      const candidates = [link.getAttribute("data-path"), link.getAttribute("title"),
+        link.getAttribute("aria-label"), link.textContent.trim()];
+      if (!candidates.some(path => classifyFile(path) === "non-code")) continue;
+      const hash = (link.getAttribute("href") || "").match(/(?:#|%23)(diff-[a-f0-9]{6,64})(?:$|[?&])/i)?.[1];
+      if (!hash) continue;
+      const target = document.getElementById?.(hash);
+      const header = target?.querySelector(HEADER) || target?.closest(HEADER);
+      const card = header && fileContainer(header);
+      if (!card) continue;
+      const cardKind = classifyFile(cardPath(card));
+      if (cardKind === "code") continue;
+      targets.add(link.closest("li, [role='treeitem'], [data-tree-entry-type='file'], [data-testid='file-tree-row']") || link);
+      targets.add(card);
+    }
+    return targets;
   }
   function findFiles(document) {
     return collectFiles(document).map(entry => entry.diffElement).filter(Boolean);
@@ -125,7 +182,7 @@
     while (root && !cards.every(card => root.contains(card))) root = root.parentElement;
     return root && root !== document.body && root !== document.documentElement ? root : null;
   }
-  const api = Object.freeze({collectFiles, treePath, cardPath, fileContainer, filename: cardPath, findFiles, findRoot});
+  const api = Object.freeze({collectFiles, nonCodeTargets, treePath, cardPath, fileContainer, filename: cardPath, findFiles, findRoot});
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else globalThis.PRCodeOnlyDOM = api;
 })();

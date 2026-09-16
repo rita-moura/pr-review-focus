@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "GitHub PR Code Only",
-  "version": "0.6.1",
+  "name": "PR Review Focus",
+  "version": "0.8.0",
   "description": "Alterna o foco em alterações de código nos Pull Requests do GitHub.",
+  "permissions": ["activeTab"],
   "action": {
-    "default_title": "Alternar filtro: somente código"
+    "default_title": "Alternar foco da revisão"
   },
   "background": {
     "service_worker": "background.js"

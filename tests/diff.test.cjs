@@ -43,7 +43,10 @@ test('summary replacement preserves native content and excludes file counters', 
   const native = el('span', {class:'diffstat'}, '+100 -20');
   const fileNative = el('span', {class:'diffstat'}, '+5 -1');
   const card = el('div', {}, '', [fileNative]);
-  const doc = documentWith([native, card]);
+  const anchor = el('a', {href:'/owner/repo/pull/1/changes'}, 'Files changed');
+  anchor.getBoundingClientRect = () => ({top:140,left:400});
+  native.getBoundingClientRect = () => ({top:140,left:1700});
+  const doc = documentWith([anchor, native, card]);
   const created = [], hidden = [];
   updateCounters(doc, {added:2, deleted:1}, node => hidden.push(node), created, doc, [card]);
   assert.deepEqual(hidden, [native]);
@@ -51,7 +54,7 @@ test('summary replacement preserves native content and excludes file counters', 
   assert.equal(created[0].textContent, 'Código carregado: +2 −1');
   assert.equal(native.textContent, '+100 -20');
   created.forEach(node => node.remove());
-  assert.equal(doc.body.children.length, 2);
+  assert.equal(doc.body.children.length, 3);
 });
 test('inline comments are hidden while their code line remains counted', () => {
   const token = comment(' // explanation');
@@ -91,13 +94,15 @@ test('native top summary numbers are replaced without touching file headers', ()
   const { replaceNativeNumbers } = require('../diff.js');
   const summary = {nodeValue:'+1,079 -34', isConnected:true};
   const cardNumber = {nodeValue:'+2 -1', isConnected:true};
-  const outside = {contains: () => false, getBoundingClientRect: () => ({top:350})};
-  const inside = {contains: () => false, getBoundingClientRect: () => ({top:490})};
+  const outside = {contains: () => false, getBoundingClientRect: () => ({top:350,left:1700})};
+  const inside = {contains: () => false, getBoundingClientRect: () => ({top:490,left:1700})};
   summary.parentElement = outside;
   cardNumber.parentElement = inside;
   const card = {contains: node => node === inside};
   const nodes = [summary, cardNumber]; let i = 0;
-  const doc = {body:{}, createTreeWalker: () => ({nextNode: () => nodes[i++] || null})};
+  const anchor = el('a', {href:'/owner/repo/pull/1/changes'}, 'Files changed');
+  anchor.getBoundingClientRect = () => ({top:350,left:400});
+  const doc = {body:{}, querySelectorAll: () => [anchor], createTreeWalker: () => ({nextNode: () => nodes[i++] || null})};
   const edits = [];
   assert.equal(replaceNativeNumbers(doc, {added:5, deleted:2}, [card], edits), true);
   assert.equal(summary.nodeValue, '+5 −2');
@@ -120,7 +125,9 @@ test('separate top numbers can be paired by position', () => {
   const a = {nodeValue:'+493', parentElement:aParent};
   const b = {nodeValue:'-142', parentElement:bParent};
   const nodes = [a,b]; let i=0;
-  const doc = {body:{}, createTreeWalker: () => ({nextNode: () => nodes[i++] || null})};
+  const anchor = el('a', {href:'/owner/repo/pull/1/changes'}, 'Files changed');
+  anchor.getBoundingClientRect = () => ({top:144,left:400});
+  const doc = {body:{}, querySelectorAll: () => [anchor], createTreeWalker: () => ({nextNode: () => nodes[i++] || null})};
   const edits = [];
   assert.equal(replaceNativeNumbers(doc, {added:21,deleted:4}, [], edits), true);
   assert.equal(a.nodeValue, '+21');
@@ -141,7 +148,9 @@ test('the original top numbers are edited in place and can be restored', () => {
   const minus = el('span', {}, '-142');
   plus.getBoundingClientRect = () => ({top:140,left:1700});
   minus.getBoundingClientRect = () => ({top:140,left:1770});
-  const doc = documentWith([plus, minus]);
+  const anchor = el('a', {href:'/owner/repo/pull/1/changes'}, 'Files changed');
+  anchor.getBoundingClientRect = () => ({top:140,left:400});
+  const doc = documentWith([anchor, plus, minus]);
   const edits = [];
   assert.equal(replaceNativeElements(doc, {added:122,deleted:56}, [], edits), true);
   assert.equal(plus.textContent, '+122');
@@ -149,6 +158,31 @@ test('the original top numbers are edited in place and can be restored', () => {
   for (const edit of edits) edit.element.textContent = edit.originalText;
   assert.equal(plus.textContent, '+493');
   assert.equal(minus.textContent, '-142');
+});
+test('top number fallback ignores unrelated counts away from the PR tabs', () => {
+  const { replaceNativeElements } = require('../diff.js');
+  const anchor = el('a', {href:'/owner/repo/pull/1/changes'}, 'Files changed');
+  const plus = el('span', {}, '+493');
+  const minus = el('span', {}, '-142');
+  anchor.getBoundingClientRect = () => ({top:140,left:400});
+  plus.getBoundingClientRect = () => ({top:260,left:1700});
+  minus.getBoundingClientRect = () => ({top:260,left:1770});
+  const doc = documentWith([anchor, plus, minus]);
+  assert.equal(replaceNativeElements(doc, {added:3,deleted:2}, [], []), false);
+  assert.equal(plus.textContent, '+493');
+  assert.equal(minus.textContent, '-142');
+});
+test('top number fallback ignores numbers left of the Files changed tab', () => {
+  const { replaceNativeElements } = require('../diff.js');
+  const anchor = el('a', {href:'/owner/repo/pull/1/changes'}, 'Files changed');
+  const plus = el('span', {}, '+12');
+  const minus = el('span', {}, '-3');
+  anchor.getBoundingClientRect = () => ({top:140,left:400});
+  plus.getBoundingClientRect = () => ({top:140,left:100});
+  minus.getBoundingClientRect = () => ({top:140,left:150});
+  const doc = documentWith([plus, minus, anchor]);
+  assert.equal(replaceNativeElements(doc, {added:1,deleted:1}, [], []), false);
+  assert.equal(plus.textContent, '+12');
 });
 test('code-files mode keeps source comments, blank changes, and review threads in legacy diffs', () => {
   const commentRow = el('tr', {}, '', [cell('', 'addition', [comment('// why this exists')])]);

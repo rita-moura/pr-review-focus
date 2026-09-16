@@ -4,6 +4,17 @@
   const COMMENTS = ".pl-c, .token.comment, [data-token-type='comment']";
   const THREADS = ".js-inline-comments-container, .review-thread, [data-testid='review-thread'], [data-testid='comment-thread'], [data-testid*='review-thread'], [class*='ReviewThread-module__']";
   const STATS = ".diffstat, [data-testid='diff-stats'], [class*='DiffStats-module__diffStats']";
+  function summaryAnchor(document) {
+    return [...document.querySelectorAll("a[href*='/pull/']")].find(link =>
+      /\/pull\/\d+\/(?:files|changes)\/?(?:[?#].*)?$/.test(link.getAttribute("href") || "") &&
+      link.getBoundingClientRect?.().top >= 0);
+  }
+  function nearSummary(element, anchor) {
+    const bounds = element?.getBoundingClientRect?.();
+    const anchorBounds = anchor?.getBoundingClientRect?.();
+    return Boolean(bounds && anchorBounds && bounds.top >= 0 && bounds.top <= 600 &&
+      bounds.left > anchorBounds.left && Math.abs(bounds.top - anchorBounds.top) <= 40);
+  }
   function commentOnly(cell) {
     if (!cell.querySelector(COMMENTS)) return false;
     const copy = cell.cloneNode(true);
@@ -135,8 +146,10 @@
     };
   }
   function updateCounters(root, totals, hide, created, document, excludedCards = [], hideComments = true) {
+    const anchor = root === document ? summaryAnchor(document) : null;
     const candidates = [...root.querySelectorAll(STATS)].filter(node =>
-      !excludedCards.some(card => card.contains(node)));
+      !excludedCards.some(card => card.contains(node)) &&
+      (root !== document || nearSummary(node, anchor)));
     for (const node of candidates) {
       if (candidates.some(other => other !== node && other.contains(node))) continue;
       const label = document.createElement("span");
@@ -154,19 +167,21 @@
   }
   function replaceNativeNumbers(document, totals, cards, edits) {
     if (!document.createTreeWalker) return false;
+    const anchor = summaryAnchor(document);
+    if (!anchor) return false;
     const walker = document.createTreeWalker(document.body, 4);
     const positives = [], negatives = [];
     let node;
     while ((node = walker.nextNode())) {
       const parent = node.parentElement;
       if (!parent || cards.some(card => card.contains(parent))) continue;
-      const top = parent.getBoundingClientRect?.().top;
-      if (top != null && (top < 0 || top > 600)) continue;
+      if (!nearSummary(parent, anchor)) continue;
       const value = node.nodeValue.trim();
       if (/^\+[\d, .]+[-−][\d, .]+$/.test(value)) {
         edits.push({node, original: node.nodeValue});
         node.nodeValue = node.nodeValue.replace(/\+\s*[\d,.]+\s*[-−]\s*[\d,.]+/,
           "+" + totals.added + " −" + totals.deleted);
+        edits.at(-1).replacement = node.nodeValue;
         return true;
       }
       if (/^\+[\d, .]+$/.test(value)) positives.push(node);
@@ -175,27 +190,29 @@
     for (const positive of positives) {
       const parent = positive.parentElement;
       const negative = negatives.find(other => {
-        if (other.parentElement === parent || other.parentElement?.parentElement === parent?.parentElement)
-          return true;
         const a = parent.getBoundingClientRect?.();
         const b = other.parentElement?.getBoundingClientRect?.();
-        return a && b && Math.abs(a.top - b.top) < 30 && Math.abs(a.left - b.left) < 300;
+        return a && b && nearSummary(other.parentElement, anchor) &&
+          Math.abs(a.top - b.top) < 30 && Math.abs(a.left - b.left) < 300;
       });
       if (!negative) continue;
       for (const [target, sign, count] of [[positive, "+", totals.added], [negative, "−", totals.deleted]]) {
         edits.push({node: target, original: target.nodeValue});
         target.nodeValue = target.nodeValue.replace(/([+−-])\s*[\d, .]+/, sign + count);
+        edits.at(-1).replacement = target.nodeValue;
       }
       return true;
     }
     return false;
   }
   function replaceNativeElements(document, totals, cards, edits) {
+    const anchor = summaryAnchor(document);
+    if (!anchor) return false;
     const positive = [], negative = [];
     for (const element of document.querySelectorAll("span, strong, b")) {
       if (cards.some(card => card.contains(element))) continue;
       const bounds = element.getBoundingClientRect?.();
-      if (!bounds || bounds.top < 0 || bounds.top > 400) continue;
+      if (!nearSummary(element, anchor)) continue;
       const value = element.textContent.trim();
       if (element.children.length) continue;
       if (/^\+\s*[\d, .]+$/.test(value)) positive.push({element, bounds});
@@ -208,6 +225,7 @@
       for (const [item, sign, count] of [[addition, "+", totals.added], [deletion, "−", totals.deleted]]) {
         edits.push({element:item.element, originalText:item.element.textContent});
         item.element.textContent = sign + count;
+        edits.at(-1).replacement = item.element.textContent;
       }
       return true;
     }

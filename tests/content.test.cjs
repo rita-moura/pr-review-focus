@@ -39,6 +39,7 @@ function setup() {
   });
   return { fail(value) { failure = value; }, invalidate() { runtime.id = undefined; }, throwOnContextCheck() { Object.defineProperty(runtime, "id", {get() { throw new Error("Extension context invalidated."); }}); }, intervalStopped() { return intervalStopped; }, docs, code, tab, navigation, document, location, reports, events,
     toggle() { listener({type:"toggleCodeOnly"}, {}, () => {}); },
+    activate() { let response; listener({type:"activateCodeOnly"}, {}, value => { response = value; }); return response; },
     poll() { poll(); }, mutate() { mutation(); for (const [id, fn] of pending) { pending.delete(id); fn(); } } };
 }
 test("click toggles filtering and restores all marked elements", () => {
@@ -52,6 +53,15 @@ test("click toggles filtering and restores all marked elements", () => {
   assert.equal(app.docs.classList.contains("prco-hidden"), false);
   assert.equal(app.navigation.classList.contains("prco-hidden"), false);
   assert.equal(app.reports.at(-1).enabled, false);
+});
+test("activation after a reload is idempotent", () => {
+  const app = setup();
+  assert.equal(app.activate().enabled, true);
+  assert.equal(app.activate().ready, true);
+  assert.equal(app.activate().enabled, true);
+  assert.equal(app.docs.classList.contains("prco-hidden"), true);
+  app.toggle();
+  assert.equal(app.docs.classList.contains("prco-hidden"), false);
 });
 test("Escape disables the filter and reports the badge state", () => {
   const app = setup(); app.toggle(); app.events.keydown({key:"Escape"});
@@ -214,4 +224,19 @@ test('file links still hide documentation when their title is an action label', 
   app.toggle();
   assert.equal(anchor.classList.contains('prco-hidden'), true);
   assert.equal(card.classList.contains('prco-hidden'), true);
+});
+test('a stale documentation link cannot hide a code card with a different filename', () => {
+  const app = setup();
+  const link = el('a', {href:'#diff-c3d4e5f6', title:'docs/old.md'}, 'old.md');
+  const card = el('div', {id:'diff-c3d4e5f6', class:'file js-file', 'data-path':'src/new.ts'}, '', [
+    el('div', {class:'file-header'}, 'src/new.ts')
+  ]);
+  for (const node of [link, card]) {
+    const values = new Set();
+    node.classList = {add: value => values.add(value), remove: value => values.delete(value), contains: value => values.has(value)};
+  }
+  app.navigation.append(link);
+  app.document.body.append(card);
+  app.toggle();
+  assert.equal(card.classList.contains('prco-hidden'), false);
 });
