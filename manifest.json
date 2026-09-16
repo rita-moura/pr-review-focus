@@ -1,19 +1,29 @@
 {
   "manifest_version": 3,
   "name": "GitHub PR Code Only",
-  "version": "0.4.1",
+  "version": "0.5.6",
   "description": "Alterna o foco em alterações de código nos Pull Requests do GitHub.",
-  "permissions": ["storage"],
   "action": {
     "default_title": "Alternar filtro: somente código"
   },
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [{
-    "matches": ["https://github.com/*"],
-    "js": ["rules.js", "dom.js", "content.js"],
-    "css": ["styles.css"],
-    "run_at": "document_idle"
-  }]
+  "content_scripts": [
+    {
+      "matches": [
+        "https://github.com/*"
+      ],
+      "js": [
+        "rules.js",
+        "dom.js",
+        "diff.js",
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

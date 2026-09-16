@@ -2,187 +2,154 @@
   "use strict";
   if (globalThis.__prCodeOnlyLoaded) return;
   globalThis.__prCodeOnlyLoaded = true;
-
   const { classifyFile, isPullRequestFiles } = globalThis.PRCodeOnlyRules;
-  const { collectFiles } = globalThis.PRCodeOnlyDOM;
-  const KEY = "prCodeOnlyOptions";
-  const options = { enabled: false, filterFiles: true };
-  let host, toggle, filter, status, stats, timer = null;
-  let marked = new Set(), previousURL = location.href, nativeSummaryNodes = [];
-
-  const remember = (node, cls) => { if (node) { node.classList.add(cls); marked.add(node); } };
+  const { collectFiles, cardPath, fileContainer } = globalThis.PRCodeOnlyDOM;
+  let enabled = false, timer = null, previousURL = location.href;
+  let stopped = false, navigationTimer = null;
+  const marked = new Set();
+  const counters = [];
+  const summaryEdits = [];
+  const { filterDiff, updateCounters, showOverallCounter } = globalThis.PRCodeOnlyDiff;
+  const observer = new MutationObserver(schedule);
+  function observe() {
+    if (stopped) return;
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true,
+      attributes: true, attributeFilter: ["data-path", "data-file-path", "title", "id", "aria-label", "href"] });
+  }
+  function hide(node) {
+    if (node) { node.classList.add("prco-hidden"); marked.add(node); }
+  }
   function restore() {
     document.body.classList.remove("prco-active");
-    for (const node of marked) node.classList.remove("prco-hidden-file");
+    for (const node of marked) node.classList.remove("prco-hidden");
     marked.clear();
-    for (const item of nativeSummaryNodes) {
-      if (item.node?.isConnected) item.node.nodeValue = item.original;
+    for (const counter of counters) counter.remove();
+    counters.length = 0;
+    for (const edit of summaryEdits) {
+      if (edit.node?.isConnected) edit.node.nodeValue = edit.original;
+      if (edit.element?.isConnected) edit.element.textContent = edit.originalText;
     }
-    nativeSummaryNodes = [];
+    summaryEdits.length = 0;
   }
-  function setStatus(message) { if (status) status.textContent = message; }
-
-  function createToolbar() {
-    if (host?.isConnected) return;
-    host = document.createElement("div");
-    host.id = "prco-toolbar";
-    const shadow = host.attachShadow({ mode: "open" });
-    const style = document.createElement("style");
-    style.textContent = ":host{font:13px/1.4 system-ui,sans-serif;color-scheme:light dark}section{background:#161b22;color:#f0f6fc;border:1px solid #57606a;border-radius:10px;padding:12px;box-shadow:0 4px 20px #0005;max-width:390px}button{background:#238636;color:white;border:1px solid #3fb950;border-radius:6px;padding:7px 10px;cursor:pointer;font:inherit}button:focus-visible,input:focus-visible{outline:3px solid #58a6ff;outline-offset:3px}label{display:block;margin-top:8px;cursor:pointer}input{margin-right:7px}p{margin:8px 0 0;font-size:12px;max-width:380px}";
-    const panel = document.createElement("section");
-    panel.setAttribute("aria-label", "GitHub PR Code Only");
-    toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.addEventListener("click", () => { options.enabled = !options.enabled; persist(); schedule(); });
-    panel.append(toggle);
-    const label = document.createElement("label");
-    filter = document.createElement("input");
-    filter.type = "checkbox";
-    filter.addEventListener("change", () => { options.filterFiles = filter.checked; persist(); schedule(); });
-    label.append(filter, document.createTextNode("Ocultar arquivos que não são código"));
-    panel.append(label);
-    stats = document.createElement("p");
-    stats.setAttribute("role", "status");
-    stats.setAttribute("aria-live", "polite");
-    panel.append(stats);
-    status = document.createElement("p");
-    status.setAttribute("role", "status");
-    status.setAttribute("aria-live", "polite");
-    panel.append(status);
-    shadow.append(style, panel);
-    document.body.append(host);
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    enabled = false;
+    observer.disconnect();
+    if (timer !== null) clearTimeout(timer);
+    if (navigationTimer !== null) clearInterval(navigationTimer);
+    timer = null;
+    document.removeEventListener("keydown", onKeydown);
+    document.removeEventListener("turbo:load", schedule);
+    document.removeEventListener("pjax:end", schedule);
+    window.removeEventListener("popstate", schedule);
+    try { chrome.runtime.onMessage.removeListener(onMessage); } catch {}
+    restore();
   }
-
-  function persist() { chrome.storage.local.set({ [KEY]: options }).catch(() => {}); }
-
-  function countLoadedCodeChanges(entries) {
-    const additions = [".blob-code-addition", ".js-blob-code-addition", "[data-code-marker='＋']", "[data-code-marker='+']"];
-    const deletions = [".blob-code-deletion", ".js-blob-code-deletion", "[data-code-marker='−']", "[data-code-marker='-']"];
-    const seen = new Set();
-    let added = 0, deleted = 0, files = 0;
-    for (const entry of entries) {
-      if (!entry.diffElement || seen.has(entry.diffElement) || classifyFile(entry.path) !== "code") continue;
-      seen.add(entry.diffElement);
-      files++;
-      const addedNodes = new Set(), deletedNodes = new Set();
-      let root = entry.diffElement;
-      // React pode colocar o cabeçalho em um irmão do conteúdo; subimos até o cartão que contém as linhas.
-      for (let level = 0; level < 6 && root; level++, root = root.parentElement) {
-        for (const selector of additions) root.querySelectorAll(selector).forEach(node => addedNodes.add(node));
-        for (const selector of deletions) root.querySelectorAll(selector).forEach(node => deletedNodes.add(node));
-        if (addedNodes.size || deletedNodes.size) break;
-      }
-      if (addedNodes.size || deletedNodes.size) {
-        added += addedNodes.size;
-        deleted += deletedNodes.size;
-      } else {
-        // Fallback para diffs recolhidos: o cabeçalho mostra a soma daquele arquivo.
-        const match = (entry.diffElement.textContent || "").match(/\+(\d+)\s*-(\d+)/);
-        if (match) {
-          added += Number(match[1]);
-          deleted += Number(match[2]);
+  function hasExtensionContext() {
+    try { return Boolean(chrome.runtime.id); }
+    catch { return false; }
+  }
+  function connectionFailed(error) {
+    if (!hasExtensionContext() || /context invalidated/i.test(String(error?.message || error))) stop();
+  }
+  function report(warning = false) {
+    if (stopped) return;
+    try {
+      if (!hasExtensionContext()) { stop(); return; }
+      Promise.resolve(chrome.runtime.sendMessage({ type: "codeOnlyState", enabled, warning }))
+        .catch(connectionFailed);
+    } catch (error) { connectionFailed(error); }
+  }
+  function hideNonCodeTreeRows() {
+    for (const row of document.querySelectorAll("[role='treeitem'], [data-tree-entry-type='file'], [data-testid='file-tree-row']")) {
+      if (row.querySelector("[role='treeitem'], [data-tree-entry-type='file']")) continue;
+      const type = row.getAttribute("data-file-type");
+      const path = row.getAttribute("data-path") || row.getAttribute("data-file-path") ||
+        row.querySelector("[data-filterable-item-text]")?.textContent ||
+        row.querySelector("a[title]")?.getAttribute("title") ||
+        row.querySelector("a[href*='#diff-']")?.textContent || row.textContent;
+      const filename = (path || "").trim().match(/[^\s<>]+\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|avif|lock|snap)(?=\s|$)/i)?.[0];
+      if (classifyFile(filename || (type ? "file" + type : path)) === "non-code") hide(row);
+    }
+  }
+  function hideNonCodeCards() {
+    const headers = ".file-header, [class*='DiffFileHeader-module__diff-file-header'], [class*='Diff-module__diffHeaderWrapper']";
+    for (const header of document.querySelectorAll(headers)) {
+      const card = fileContainer(header);
+      if (!card) continue;
+      let path = cardPath(card);
+      if (classifyFile(path) !== "non-code") {
+        for (const named of header.querySelectorAll("[title], [aria-label]")) {
+          const candidate = named.getAttribute("title") || named.getAttribute("aria-label");
+          if (classifyFile(candidate) === "non-code") { path = candidate; break; }
         }
       }
-    }
-    return { added, deleted, files };
-  }
-
-  function replaceNativeSummary(added, deleted) {
-    const addPattern = /^\+\s*[\d\s,.]+$/;
-    const delPattern = /^[-−–—]\s*[\d\s,.]+$/;
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let addNode = null, delNode = null, node;
-    while ((node = walker.nextNode())) {
-      const text = node.nodeValue.replace(/\u00a0/g, " ").trim();
-      const parent = node.parentElement;
-      if (!parent || parent.closest("#prco-toolbar, [id^='diff-'], .file-header, [class*='DiffFile'], [class*='diff-file']")) continue;
-      const top = parent.getBoundingClientRect().top;
-      if (top < 0 || top > 330) continue;
-      if (!addNode && addPattern.test(text)) addNode = node;
-      if (!delNode && delPattern.test(text)) delNode = node;
-      if (addNode && delNode) break;
-    }
-    for (const item of nativeSummaryNodes) {
-      if (item.node?.isConnected) item.node.nodeValue = item.original;
-    }
-    nativeSummaryNodes = [];
-    if (addNode) {
-      nativeSummaryNodes.push({ node: addNode, original: addNode.nodeValue });
-      addNode.nodeValue = "+" + added;
-    }
-    if (delNode) {
-      nativeSummaryNodes.push({ node: delNode, original: delNode.nodeValue });
-      delNode.nodeValue = "-" + deleted;
+      if (classifyFile(path) === "non-code") hide(card);
     }
   }
-
-  function updateStats(entries) {
-    const totals = countLoadedCodeChanges(entries);
-    const value = "Código carregado: +" + totals.added + " -" + totals.deleted +
-      " · " + totals.files + " arquivos";
-    if (stats) stats.textContent = value;
-    replaceNativeSummary(totals.added, totals.deleted);
-  }
-
   function apply() {
+    if (stopped) return;
+    if (timer !== null) clearTimeout(timer);
     timer = null;
+    observer.disconnect();
     try {
       restore();
-      if (!isPullRequestFiles(location.pathname)) { host?.remove(); return; }
-      createToolbar();
-      toggle.textContent = options.enabled ? "Restaurar página normal" : "Ativar somente código";
-      filter.checked = options.filterFiles;
-      if (!options.enabled) { setStatus("Modo normal. Ative para focar nos arquivos de código."); return; }
+      if (!isPullRequestFiles(location.pathname)) enabled = false;
+      if (!enabled) { report(); return; }
       const entries = collectFiles(document);
-      let hidden = 0, unknown = 0;
+      const cards = entries.map(entry => entry.diffElement).filter(Boolean);
+      if (!cards.length) { report(true); return; }
       for (const entry of entries) {
-        const kind = classifyFile(entry.path);
-        if (kind === "unknown") unknown++;
-        if (options.filterFiles && kind === "non-code") {
-          remember(entry.treeElement, "prco-hidden-file");
-          remember(entry.diffElement, "prco-hidden-file");
-          hidden++;
+        if (classifyFile(entry.path) === "non-code") {
+          hide(entry.treeElement);
+          hide(entry.diffElement);
         }
       }
+      hideNonCodeTreeRows();
+      hideNonCodeCards();
+      const totals = { added: 0, deleted: 0 };
+      for (const entry of entries) {
+        if (!entry.diffElement || classifyFile(entry.path) !== "code") continue;
+        const counts = filterDiff(entry.diffElement, hide, entry.path);
+        totals.added += counts.added;
+        totals.deleted += counts.deleted;
+        updateCounters(entry.diffElement, counts, hide, counters, document);
+      }
+      showOverallCounter(document, totals, hide, counters, cards, summaryEdits);
       document.body.classList.add("prco-active");
-      setStatus(hidden + " arquivos não código ocultados · " + unknown + " caminhos não identificados mantidos visíveis.");
-      updateStats(entries);
+      report();
     } catch (error) {
       restore();
-      options.enabled = false;
-      setStatus("Falha no filtro; página restaurada.");
-      console.warn("[PR Code Only]", error);
-    }
+      enabled = false;
+      report(true);
+      console.warn("[PR Code Only] Página restaurada após falha no filtro.", error);
+    } finally { observe(); }
   }
-
-  function schedule() { if (timer === null) timer = setTimeout(apply, 150); }
-  const observer = new MutationObserver(() => {
-    if (isPullRequestFiles(location.pathname) || marked.size || host?.isConnected) schedule();
-  });
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.type === "toggleCodeOnly") {
-      options.enabled = !options.enabled;
-      persist();
-      schedule();
-      sendResponse({ enabled: options.enabled });
-    }
-  });
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && options.enabled) { options.enabled = false; persist(); schedule(); }
-  });
+  function schedule() {
+    if (!stopped && enabled && timer === null) timer = setTimeout(apply, 100);
+  }
+  function onMessage(message, sender, reply) {
+    if (stopped) return;
+    if (message?.type !== "toggleCodeOnly") return;
+    if (!isPullRequestFiles(location.pathname)) { reply({ enabled: false }); return; }
+    enabled = !enabled;
+    apply();
+    reply({ enabled });
+  }
+  chrome.runtime.onMessage.addListener(onMessage);
+  function onKeydown(event) {
+    if (event.key === "Escape" && enabled) { enabled = false; apply(); }
+  }
+  document.addEventListener("keydown", onKeydown);
   document.addEventListener("turbo:load", schedule);
   document.addEventListener("pjax:end", schedule);
   window.addEventListener("popstate", schedule);
-  setInterval(() => { if (location.href !== previousURL) { previousURL = location.href; schedule(); } }, 1000);
-  function read(value) {
-    if (value && typeof value === "object")
-      for (const key of Object.keys(options)) if (typeof value[key] === "boolean") options[key] = value[key];
-  }
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes[KEY]) { read(changes[KEY].newValue); schedule(); }
-  });
-  chrome.storage.local.get(KEY).then(result => read(result[KEY])).catch(() => {}).finally(() => {
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-path", "data-file-path", "title", "id"] });
-    schedule();
-  });
+  navigationTimer = setInterval(() => {
+    if (stopped) return;
+    if (!hasExtensionContext()) { stop(); return; }
+    if (location.href !== previousURL) { previousURL = location.href; apply(); }
+  }, 1000);
+  observe();
+  report();
 })();

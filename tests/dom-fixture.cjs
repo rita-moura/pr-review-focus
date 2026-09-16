@@ -9,7 +9,20 @@ class Element {
     this.parentElement = null;
     for (const child of children) this.append(child);
   }
+  get id() { return this.getAttribute("id") || ""; }
+  closest(selector) {
+    for (let node = this; node; node = node.parentElement) {
+      if (selector.split(",").some(part => matchesDescendant(node, part.trim()))) return node;
+    }
+    return null;
+  }
   append(child) { child.parentElement = this; this.children.push(child); }
+  setAttribute(name, value) { this.attributes[name] = value; }
+  insertBefore(child, reference) {
+    child.parentElement = this;
+    this.children.splice(this.children.indexOf(reference), 0, child);
+  }
+  set textContent(value) { this.children = []; this.ownText = value; }
   getAttribute(name) { return this.attributes[name] ?? null; }
   get textContent() { return this.ownText + this.children.map(child => child.textContent).join(""); }
   contains(node) { return this === node || this.children.some(child => child.contains(node)); }
@@ -35,13 +48,14 @@ class Element {
 }
 function simple(node, selector) {
   let ok = true;
-  let rest = selector.replace(/\[([\w-]+)(?:(\^=|\*=|=)['"]([^'"]*)['"])?\]/g,
+  let rest = selector.replace(/\[([\w-]+)(?:(\^=|\*=|\$=|=)['"]([^'"]*)['"])?\]/g,
     (_, name, operator, value) => {
       const actual = node.getAttribute(name);
       if (actual === null) ok = false;
       else if (operator === "=" && actual !== value) ok = false;
       else if (operator === "^=" && !actual.startsWith(value)) ok = false;
       else if (operator === "*=" && !actual.includes(value)) ok = false;
+      else if (operator === "$=" && !actual.endsWith(value)) ok = false;
       return "";
     });
   rest = rest.replace(/\.([\w-]+)/g, (_, name) => {
@@ -51,7 +65,7 @@ function simple(node, selector) {
     if (node.getAttribute("id") !== id) ok = false;
     return "";
   });
-  if (rest && !/^[a-z]+$/i.test(rest)) throw new Error("Unsupported fixture selector: " + selector);
+  if (rest && !/^[a-z][a-z0-9-]*$/i.test(rest)) throw new Error("Unsupported fixture selector: " + selector);
   return ok && (!rest || node.tagName.toLowerCase() === rest.toLowerCase());
 }
 function matchesDescendant(node, selector) {
@@ -70,6 +84,6 @@ function element(tag, attrs, text, children) { return new Element(tag, attrs, te
 function documentWith(children) {
   const body = element("body", {}, "", children);
   const html = element("html", {}, "", [body]);
-  return { body, documentElement: html, querySelectorAll: selector => html.querySelectorAll(selector) };
+  return { createElement: tag => element(tag), body, documentElement: html, querySelector: selector => html.querySelector(selector), querySelectorAll: selector => html.querySelectorAll(selector) };
 }
 module.exports = { element, documentWith };

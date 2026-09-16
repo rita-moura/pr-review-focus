@@ -1,17 +1,24 @@
 "use strict";
 
-function isPullRequestDiff(url) {
-  return /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+\/(?:changes|files)(?:[/?#]|$)/i.test(url || "");
+async function showState(tabId, enabled, warning = false) {
+  await chrome.action.setBadgeText({ tabId, text: warning ? "!" : enabled ? "ON" : "" });
+  await chrome.action.setBadgeBackgroundColor({ tabId, color: warning ? "#9a6700" : "#238636" });
+  await chrome.action.setTitle({ tabId, title: warning
+    ? "Diff não reconhecido. Abra Changes/Files changed ou recarregue a página."
+    : enabled ? "Somente código ativo — clique para desligar (ou Esc)" : "Clique para ativar somente código" });
 }
 
 chrome.action.onClicked.addListener(async tab => {
-  if (!tab?.id || !isPullRequestDiff(tab.url)) return;
+  if (tab?.id == null) return;
   try {
-    const result = await chrome.tabs.sendMessage(tab.id, { type: "toggleCodeOnly" });
-    await chrome.action.setBadgeText({ tabId: tab.id, text: result?.enabled ? "ON" : "" });
-    await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: result?.enabled ? "#238636" : "#6e7781" });
-  } catch (error) {
-    // A content script pode ainda não existir em uma aba aberta antes da instalação.
-    console.warn("[PR Code Only] Recarregue a aba do PR para ativar a extensão.", error);
+    // The content script validates the route; tab.url may be absent without tabs permission.
+    await chrome.tabs.sendMessage(tab.id, { type: "toggleCodeOnly" });
+  } catch {
+    await showState(tab.id, false, true);
+  }
+});
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type === "codeOnlyState" && sender.tab?.id != null) {
+    showState(sender.tab.id, message.enabled === true, message.warning === true).catch(() => {});
   }
 });

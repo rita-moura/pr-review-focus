@@ -1,177 +1,57 @@
-# github-pr-code-only
+# GitHub PR Code Only
 
-Extensão privada do Chrome para focar nas alterações de código em Pull Requests do GitHub.
+Extensão do Chrome para focar no código de um Pull Request do GitHub. Versão **0.5.6**.
 
-## Estado do projeto
+## Instalação e uso
 
-Versão **0.3.0**, sem dependências e sem publicação na Chrome Web Store.
-A lógica de classificação e de rotas foi verificada; a interface ainda precisa de teste
-manual no Chrome em um PR real. O GitHub pode variar a estrutura do diff entre contas
-e versões: esta versão não promete compatibilidade com todas essas interfaces.
+1. Em `chrome://extensions/`, ative **Modo do desenvolvedor**.
+2. Use **Carregar sem compactação** e selecione esta pasta.
+3. Abra um PR em **Changes / Files changed** e recarregue a aba.
+4. Clique no ícone da extensão para ligar; clique novamente ou pressione **Esc** para desligar.
 
-## Funcionalidades
+O ícone mostra **ON** enquanto o filtro está ativo. Não há painel nem configuração.
+O estado é independente por aba e começa desligado ao recarregar. Ao sair da tela de alterações, a página é restaurada.
+Se o ícone mostrar **!**, passe o mouse sobre ele para ver a orientação: abra a tela de alterações ou recarregue a página.
 
-- Botão flutuante para ativar o foco e restaurar a página normal.
-- Oculta elementos externos à área do diff quando ela é reconhecida.
-- Opção para esconder arquivos que não são código; os comentários do GitHub permanecem visíveis.
-- Mantém nomes dos arquivos, numeração, linhas removidas/adicionadas e contexto do diff.
-- Contador das linhas dos diffs de código **carregados no DOM**; o GitHub pode carregar cartões sob demanda.
-- Preferências locais ao perfil do Chrome e compartilhadas entre suas abas.
-- Reaplica o filtro em atualizações dinâmicas e navegação interna.
-- Tecla **Esc** para sair do modo de foco.
-- Se o diff não for reconhecido, mantém a página intacta e apresenta um aviso.
+Após atualizar os arquivos, recarregue a extensão em `chrome://extensions/` e também a aba do PR.
 
-O filtro é apenas visual: não remove comentários, não altera arquivos e não executa
-aprovações, merges ou outras ações no GitHub. Ele não bloqueia o download do conteúdo
-ocultado nem funciona como uma barreira de segurança.
+## O que é ocultado
 
-## Instalar sem publicar
+- Arquivos de documentação, imagens, mídia, lockfiles, snapshots e arquivos gerados reconhecidos pelas regras.
+- A estrutura do GitHub (cabeçalho, abas, árvore e controles) permanece visível.
+- Comentários de revisão dentro dos arquivos e comentários de código identificados pela marcação de sintaxe do GitHub. Linhas compostas só por comentários são ocultadas; código na mesma linha é preservado.
 
-1. Clone este repositório ou use **Code → Download ZIP** e extraia o arquivo.
-2. Abra `chrome://extensions/` no Chrome.
-3. Ative **Modo do desenvolvedor**.
-4. Clique em **Carregar sem compactação**.
-5. Selecione a pasta que contém `manifest.json`.
-6. Abra ou recarregue um PR e entre em **Files changed**.
-7. Clique em **Ativar somente código**, no canto inferior direito.
+Nomes dos arquivos de código, linhas adicionadas/removidas e contexto do diff são preservados.
+JSON, YAML e outras configurações são considerados código. Formatos desconhecidos permanecem visíveis.
+As regras estão em `rules.js`; os seletores do GitHub estão em `dom.js` e `styles.css`.
+Os contadores reconhecidos são substituídos temporariamente por **Código carregado: +X −Y**. Quando o GitHub usa outro formato de contador, a extensão tenta atualizar diretamente os números exibidos no topo. Se não encontrar um par seguro, mantém o resumo original. A soma considera apenas arquivos de código e exclui linhas vazias e linhas compostas só por comentários. Diffs ainda não carregados, recolhidos ou fora do DOM não entram no total. Ao desligar, os contadores originais são restaurados. Se o GitHub não expuser a marcação de sintaxe ou um contador reconhecível, esses comentários ou contadores permanecem como estão.
 
-Não é necessário executar npm install, compilar o projeto ou gerar uma chave.
-Se o Chrome for gerenciado pela empresa, a instalação depende das políticas do administrador.
+Se nenhum cartão de diff for reconhecido, a página fica intacta e o ícone mostra **!**.
+A extensão acompanha mudanças no DOM e reaplica o filtro a arquivos carregados depois.
+Desligue o filtro para escrever comentários e acessar os controles completos do GitHub.
 
-## Usar com a equipe
+## Privacidade
 
-Conceda acesso ao repositório privado somente às pessoas desejadas.
-Cada pessoa deve clonar/baixar e carregar a extensão no próprio Chrome.
+Sem token, chamadas de rede, dependências externas ou armazenamento de preferências/conteúdo.
+O filtro é visual, não altera arquivos nem envia ações de revisão. Funciona em `github.com`, não em domínios Enterprise.
 
-Após uma atualização: execute `git pull --ff-only` (ou baixe e extraia a nova versão),
-clique no ícone de recarregar da extensão em `chrome://extensions/`
-e recarregue a aba do PR. Não há atualização automática nesta forma de distribuição.
+## Desenvolvimento e validação
 
-Para revisar/escrever comentários ou usar controles ocultados, restaure a página normal.
-Desmarque o filtro de arquivos para inspecionar tudo antes de concluir sua revisão.
+Execute `npm test` e `npm run check` com Node.js 18 ou superior. Não é necessário instalar dependências.
+Os testes cobrem classificação, detecção do DOM, ativação, restauração, navegação e comunicação com o ícone.
+O DOM e as APIs Chrome são simulados nos testes; isso não substitui validação em um PR real.
 
-## O que é considerado código?
+Para validar no Chrome: teste ativar/desativar e Esc, navegação interna, modos unified/split,
+PRs só de documentação e rolagem com carregamento de arquivos. O GitHub pode variar o DOM entre contas.
 
-A classificação por caminho fica em `rules.js`.
+`patch.js` é um utilitário legado com testes; não é carregado pela extensão.
 
-- Mantidos: JavaScript, TypeScript, Ruby, Python, HTML, CSS, SQL e outras linguagens;
-  Dockerfile, Jenkinsfile e Makefile.
-- Configurações como JSON, YAML, TOML e .env também são mantidas, pois podem mudar
-  o comportamento da aplicação.
-- Ocultados pelo filtro: documentação, imagens (incluindo SVG), mídia, lockfiles,
-  snapshots, source maps, arquivos minificados e pastas como dist, build e vendor.
-- Formatos desconhecidos e caminhos não identificados são mantidos visíveis por segurança.
+## Erro “Extension context invalidated”
 
-São heurísticas, não análise semântica: SVG e pastas chamadas build, por exemplo,
-podem conter código importante no seu projeto. Ajuste as regras ou desmarque o filtro.
-Comentários escritos **dentro do código-fonte** e comentários de revisão do GitHub permanecem visíveis.
-Não há detecção universal de arquivos gerados nem lista configurável pela interface nesta versão.
+Ao recarregar ou atualizar a extensão, abas abertas podem continuar com o content script da versão anterior,
+cuja conexão com o Chrome deixou de existir. Recarregue também a aba do PR e clique no ícone para ativar.
+A versão 0.5.6 trata falhas síncronas e assíncronas de comunicação e encerra o script invalidado,
+restaurando a página e desligando seus observadores e temporizadores. Ela não pode atualizar scripts antigos
+já em execução: o primeiro recarregamento da aba continua necessário.
 
-## Privacidade e permissões
-
-- Não usa token, API do GitHub, analytics, IA, servidor ou bibliotecas externas.
-- Não envia conteúdo do PR para outros serviços.
-- Usa somente a permissão storage para salvar três preferências booleanas.
-- O content script tem acesso a github.com para detectar navegação sem recarregamento;
-  as alterações visuais ficam restritas às rotas de arquivos do PR.
-- O código e os nomes de arquivos são lidos apenas do DOM local para montar o filtro,
-  sem serem salvos nas preferências.
-- GitHub Enterprise em outro domínio não está incluído nesta versão.
-
-## Desenvolvimento
-
-- `manifest.json`: Manifest V3 e registro dos scripts.
-- `rules.js`: classificação de arquivos e reconhecimento de rotas.
-- `dom.js`: seletores e leitura de arquivos nas interfaces antiga e React (`/changes`).
-- `content.js`: interface e restauração.
-- `styles.css`: estilos limitados ao modo ativo.
-- `tests/rules.test.cjs`: testes das funções puras.
-- `tests/dom.test.cjs`: regressões com uma árvore DOM simulada; não substituem teste no navegador.
-
-Com Node.js 18 ou superior, sem instalar dependências:
-
-```bash
-npm test
-npm run check
-```
-
-Referências oficiais:
-[content scripts](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts)
-e [carregar uma extensão local](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked).
-
-## Checklist manual antes de usar em revisões importantes
-
-- Abrir um PR diretamente e também navegando de outra página do GitHub.
-- Verificar modos unified e split, tema claro e escuro.
-- Ativar, desativar e pressionar Esc; conferir restauração completa.
-- Alternar filtro e comentários; confirmar que nomes e linhas do diff continuam visíveis.
-- Testar PR apenas com documentação, arquivos renomeados e formatos desconhecidos.
-- Rolar um PR grande, carregar diffs adicionais e conferir o contador.
-- Navegar para Conversation/Commits/outro repositório; nada deve continuar oculto.
-- Abrir duas abas e verificar sincronização das preferências.
-- Conferir o console e a página de extensões em busca de erros.
-
-## Se não funcionar no seu GitHub
-
-Desative o foco pelo botão ou Esc. Se necessário, desative a extensão e recarregue a página.
-Os seletores de arquivos e da área de diff estão centralizados em SELECTORS,
-no arquivo dom.js. Os seletores de comentários ficam em styles.css.
-Eles devem ser ajustados com base no DOM real da sua interface.
-
-Não foram executados testes visuais de navegador nesta preparação.
-Não publique capturas ou HTML com código privado para relatar um problema.
-
-
-## Atualização 0.1.1
-
-Corrige a ausência de detecção dos cartões React na tela /changes.
-A detecção agora contempla as classes de arquivo e cabeçalho do GitHub, além de
-alvos diff-* que contenham um cabeçalho de arquivo. Lê o nome no cabeçalho mesmo
-quando o conteúdo está recolhido ou mostra Load Diff. Remove marcas direcionais
-invisíveis do nome e usa o destino na descrição acessível de renomeações.
-Uma falha na identificação continua deixando o arquivo/página visível.
-
-Os padrões DOM foram conferidos no código público do
-[Refined GitHub](https://github.com/refined-github/refined-github/tree/main/source/features),
-em especial batch-mark-files-as-viewed, actionable-pr-view-file e restore-file.
-Não foi acessado o conteúdo do PR privado mostrado na captura.
-
-Para atualizar a instalação por ZIP:
-
-1. Baixe o ZIP atual e extraia em uma pasta separada.
-2. Copie os arquivos extraídos **para dentro da pasta que o Chrome já carrega**,
-   substituindo os antigos e incluindo o novo dom.js.
-3. Em chrome://extensions/, clique no botão de recarregar da extensão.
-4. Confira a versão **0.1.1** e recarregue também a aba do PR.
-
-Apenas baixar outro ZIP ou recarregar a extensão sem atualizar a pasta não instala a correção.
-
-
-## Atualização 0.1.3
-
-Corrige PRs com diff virtualizado: a extensão também examina as linhas da árvore lateral (File Tree) e usa um fallback seguro para reconhecer extensões no cabeçalho quando o GitHub não expõe `data-path` ou a classe esperada. Assim documentos como `.md` são ocultados mesmo antes de todos os diffs serem renderizados.
-
-
-## Atualização 0.1.4
-
-A versão usa também os links `#diff-...` da árvore lateral do GitHub. Isso é necessário porque a interface atual virtualiza os cartões do diff e pode manter apenas um cartão no DOM. Os itens da árvore são filtrados pelo caminho/extensão mesmo quando o conteúdo do arquivo ainda não foi carregado.
-
-
-## Versão 0.2.0 — plano implementado
-
-A versão 0.3 separa a árvore lateral dos cartões do diff, preserva comentários do GitHub e conta as linhas dos cartões de código carregados diretamente no DOM. O indicador próprio mostra `Código carregado: +X -Y` e substitui temporariamente o resumo nativo; arquivos não código são ocultados somente quando o modo está ativo.
-
-
-## Versão 0.2.0 — filtro e contador de código
-
-A extensão agora separa a árvore lateral dos cartões do diff, sem depender de um contêiner comum no DOM. Arquivos não código são ocultados diretamente; comentários do GitHub não são ocultados. As linhas são contadas localmente no DOM para evitar chamadas ao endpoint `.patch` (que pode ser bloqueado por CORS). Em PRs grandes, carregue/role os cartões para atualizar a contagem.
-
-
-## Versão 0.2.1
-
-Evita novas requisições do patch a cada mutação da página e não inclui caminhos desconhecidos na soma de código. Formatos desconhecidos permanecem visíveis, mas a contagem de código só considera extensões reconhecidas.
-
-
-## Versão 0.2.2
-
-Corrige o acesso ao patch: o GitHub redireciona o arquivo para `patch-diff.githubusercontent.com`, então a busca agora passa por um service worker com permissões restritas aos dois hosts e somente a rotas de patch de Pull Request. Adiciona também detecção de nomes exibidos como texto na árvore React. Os comentários do GitHub continuam visíveis.
+A lista de erros em `chrome://extensions/` também guarda erros anteriores: use **Clear all** depois de recarregar a extensão e a aba para verificar se aparece um erro novo.

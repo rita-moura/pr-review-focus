@@ -1,1 +1,2 @@
-body.prco-active .prco-hidden-file{display:none!important}#prco-toolbar{display:none!important}
+body.prco-active .prco-hidden { display: none !important; }
+.prco-counter { font-size: 12px; white-space: nowrap; margin-inline: 6px; }

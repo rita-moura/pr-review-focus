@@ -113,3 +113,56 @@ test("hydrated filenames are read again after DOM changes", () => {
   card.querySelector("code").ownText = "docs/loaded.md";
   assert.equal(classifyFile(filename(card)), "non-code");
 });
+
+const { collectFiles } = require("../dom.js");
+test("file references in diff content do not replace sidebar rows", () => {
+  const row = el("li", {}, "", [el("a", {href:"#diff-doc"}, "README.md")]);
+  const card = reactFile("README.md", {id:"doc"});
+  card.append(el("span", {}, "README.md"));
+  const entries = collectFiles(documentWith([row, card]));
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].treeElement, row);
+  assert.equal(entries[0].diffElement, card);
+});
+test("encoded diff hashes map full paths onto cards", () => {
+  const row = el("li", {}, "", [el("a", {href:"/owner/repo/pull/1/changes%23diff-doc"}, "docs/README.md")]);
+  const card = reactFile("README.md", {id:"doc"});
+  const entries = collectFiles(documentWith([row, card]));
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].path, "docs/README.md");
+  assert.equal(entries[0].diffElement, card);
+});
+test("case-sensitive paths remain separate", () => {
+  const entries = collectFiles(documentWith([reactFile("a.ts"), reactFile("A.ts", {id:"other"})]));
+  assert.equal(entries.length, 2);
+});
+test("unrelated links and spans are not files", () => {
+  const doc = documentWith([el("a", {href:"#diff-random"}, "README.md"), el("span", {}, "README.md")]);
+  assert.deepEqual(collectFiles(doc), []);
+});
+test("tree-only entries and extensionless code are preserved", () => {
+  const row = el("li", {}, "", [el("a", {href:"#diff-docker"}, "Dockerfile")]);
+  const entries = collectFiles(documentWith([row]));
+  assert.equal(entries[0].path, "Dockerfile");
+  assert.equal(entries[0].treeElement, row);
+  assert.equal(entries[0].diffElement, null);
+});
+
+test("React header and diff content in sibling elements use the whole file container", () => {
+  const target = reactFile("app.rb", {unloaded:true});
+  const line = el("div", {class:"DiffLine-module__line--hash addition"}, "1 + run()");
+  const container = el("section", {class:"DiffFile-module__file--hash"}, "", [target, line]);
+  const entry = collectFiles(documentWith([container]))[0];
+  assert.equal(entry.diffElement, container);
+  assert.equal(entry.path, "app.rb");
+});
+test("file tree uses the complete hidden path for document rows", () => {
+  const row = el("li", {role:"treeitem", "data-tree-entry-type":"file"}, "", [
+    el("span", {"data-filterable-item-text":""}, "docs/spec.md"),
+    el("a", {href:"#diff-doc"}, "spec.md")
+  ]);
+  const entry = collectFiles(documentWith([row]))[0];
+  assert.equal(entry.path, "docs/spec.md");
+  assert.equal(entry.treeElement, row);
+  assert.equal(classifyFile(entry.path), "non-code");
+});
