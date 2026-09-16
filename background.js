@@ -1,11 +1,12 @@
 "use strict";
 
-async function showState(tabId, enabled, warning = false) {
+async function showState(tabId, enabled, warning = false, mode = "code") {
   await chrome.action.setBadgeText({ tabId, text: warning ? "!" : enabled ? "ON" : "" });
   await chrome.action.setBadgeBackgroundColor({ tabId, color: warning ? "#9a6700" : "#238636" });
   await chrome.action.setTitle({ tabId, title: warning
     ? "Diff não reconhecido. Abra Changes/Files changed ou recarregue a página."
-    : enabled ? "Somente código ativo — clique para desligar (ou Esc)" : "Clique para ativar somente código" });
+    : enabled ? (mode === "files" ? "Arquivos de código ativos" : "Só código ativo") +
+      " — clique para desligar (ou Esc)" : "Clique para ativar o filtro" });
 }
 
 chrome.action.onClicked.addListener(async tab => {
@@ -19,6 +20,6 @@ chrome.action.onClicked.addListener(async tab => {
 });
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "codeOnlyState" && sender.tab?.id != null) {
-    showState(sender.tab.id, message.enabled === true, message.warning === true).catch(() => {});
+    showState(sender.tab.id, message.enabled === true, message.warning === true, message.mode).catch(() => {});
   }
 });

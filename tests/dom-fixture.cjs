@@ -7,6 +7,7 @@ class Element {
     this.ownText = text;
     this.children = [];
     this.parentElement = null;
+    this.listeners = new Map();
     for (const child of children) this.append(child);
   }
   get id() { return this.getAttribute("id") || ""; }
@@ -17,6 +18,8 @@ class Element {
     return null;
   }
   append(child) { child.parentElement = this; this.children.push(child); }
+  addEventListener(name, callback) { this.listeners.set(name, callback); }
+  click() { this.listeners.get("click")?.(); }
   setAttribute(name, value) { this.attributes[name] = value; }
   insertBefore(child, reference) {
     child.parentElement = this;
@@ -84,6 +87,6 @@ function element(tag, attrs, text, children) { return new Element(tag, attrs, te
 function documentWith(children) {
   const body = element("body", {}, "", children);
   const html = element("html", {}, "", [body]);
-  return { createElement: tag => element(tag), body, documentElement: html, querySelector: selector => html.querySelector(selector), querySelectorAll: selector => html.querySelectorAll(selector) };
+  return { createElement: tag => element(tag), getElementById: id => html.querySelector("#" + id), body, documentElement: html, querySelector: selector => html.querySelector(selector), querySelectorAll: selector => html.querySelectorAll(selector) };
 }
 module.exports = { element, documentWith };

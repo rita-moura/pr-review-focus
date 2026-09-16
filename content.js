@@ -4,12 +4,13 @@
   globalThis.__prCodeOnlyLoaded = true;
   const { classifyFile, isPullRequestFiles } = globalThis.PRCodeOnlyRules;
   const { collectFiles, cardPath, fileContainer } = globalThis.PRCodeOnlyDOM;
-  let enabled = false, timer = null, previousURL = location.href;
+  let enabled = false, mode = "code", timer = null, previousURL = location.href;
+  let modePicker = null, modeButtons = null;
   let stopped = false, navigationTimer = null;
   const marked = new Set();
   const counters = [];
   const summaryEdits = [];
-  const { filterDiff, updateCounters, showOverallCounter } = globalThis.PRCodeOnlyDiff;
+  const { filterDiff, updateCounters, showOverallCounter, readFileChangeTotals } = globalThis.PRCodeOnlyDiff;
   const observer = new MutationObserver(schedule);
   function observe() {
     if (stopped) return;
@@ -31,6 +32,33 @@
     }
     summaryEdits.length = 0;
   }
+  function removeModePicker() {
+    modePicker?.remove();
+    modePicker = null;
+    modeButtons = null;
+  }
+  function showModePicker() {
+    if (!modePicker?.parentElement) {
+      modePicker = document.createElement("div");
+      modePicker.setAttribute("id", "prco-mode-picker");
+      modePicker.setAttribute("role", "group");
+      modePicker.setAttribute("aria-label", "Modo de revisão");
+      modeButtons = {};
+      for (const [value, label] of [["code", "Só código"], ["files", "Arquivos de código"]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.addEventListener("click", () => {
+          if (mode !== value) { mode = value; apply(); }
+        });
+        modeButtons[value] = button;
+        modePicker.append(button);
+      }
+      document.body.append(modePicker);
+    }
+    for (const [value, button] of Object.entries(modeButtons))
+      button.setAttribute("aria-pressed", String(mode === value));
+  }
   function stop() {
     if (stopped) return;
     stopped = true;
@@ -45,6 +73,7 @@
     window.removeEventListener("popstate", schedule);
     try { chrome.runtime.onMessage.removeListener(onMessage); } catch {}
     restore();
+    removeModePicker();
   }
   function hasExtensionContext() {
     try { return Boolean(chrome.runtime.id); }
@@ -57,7 +86,7 @@
     if (stopped) return;
     try {
       if (!hasExtensionContext()) { stop(); return; }
-      Promise.resolve(chrome.runtime.sendMessage({ type: "codeOnlyState", enabled, warning }))
+      Promise.resolve(chrome.runtime.sendMessage({ type: "codeOnlyState", enabled, mode, warning }))
         .catch(connectionFailed);
     } catch (error) { connectionFailed(error); }
   }
@@ -71,6 +100,24 @@
         row.querySelector("a[href*='#diff-']")?.textContent || row.textContent;
       const filename = (path || "").trim().match(/[^\s<>]+\.(?:md|markdown|txt|rst|adoc|pdf|png|jpe?g|gif|svg|webp|avif|lock|snap)(?=\s|$)/i)?.[0];
       if (classifyFile(filename || (type ? "file" + type : path)) === "non-code") hide(row);
+    }
+  }
+  function hideNonCodeDiffLinks() {
+    for (const link of document.querySelectorAll("a[href*='#diff-'], a[href*='%23diff-']")) {
+      const candidates = [link.getAttribute("data-path"), link.getAttribute("title"),
+        link.getAttribute("aria-label"), link.textContent.trim()];
+      if (!candidates.some(path => classifyFile(path) === "non-code")) continue;
+      const row = link.closest("li, [role='treeitem'], [data-tree-entry-type='file'], [data-testid='file-tree-row']");
+      hide(row || link);
+      const hash = (link.getAttribute("href") || "").match(/(?:#|%23)(diff-[a-f0-9]{6,64})(?:$|[?&])/i)?.[1];
+      if (!hash) continue;
+      const target = document.getElementById?.(hash);
+      if (!target) continue;
+      const header = target.querySelector(".file-header, [class*='DiffFileHeader-module__diff-file-header'], [class*='Diff-module__diffHeaderWrapper']") ||
+        target.closest(".file-header, [class*='DiffFileHeader-module__diff-file-header'], [class*='Diff-module__diffHeaderWrapper']");
+      const container = (header && fileContainer(header)) ||
+        target.closest("[data-testid='diff-file-container'], [data-testid='diff-file'], .file.js-file, [class*='DiffFile-module__']") || target;
+      hide(container);
     }
   }
   function hideNonCodeCards() {
@@ -96,10 +143,10 @@
     try {
       restore();
       if (!isPullRequestFiles(location.pathname)) enabled = false;
-      if (!enabled) { report(); return; }
+      if (!enabled) { removeModePicker(); report(); return; }
       const entries = collectFiles(document);
       const cards = entries.map(entry => entry.diffElement).filter(Boolean);
-      if (!cards.length) { report(true); return; }
+      if (!cards.length) { removeModePicker(); report(true); return; }
       for (const entry of entries) {
         if (classifyFile(entry.path) === "non-code") {
           hide(entry.treeElement);
@@ -108,13 +155,16 @@
       }
       hideNonCodeTreeRows();
       hideNonCodeCards();
+      hideNonCodeDiffLinks();
+      showModePicker();
       const totals = { added: 0, deleted: 0 };
       for (const entry of entries) {
         if (!entry.diffElement || classifyFile(entry.path) !== "code") continue;
-        const counts = filterDiff(entry.diffElement, hide, entry.path);
+        const visible = filterDiff(entry.diffElement, hide, entry.path, mode === "code");
+        const counts = mode === "files" ? readFileChangeTotals(entry.diffElement) || visible : visible;
         totals.added += counts.added;
         totals.deleted += counts.deleted;
-        updateCounters(entry.diffElement, counts, hide, counters, document);
+        updateCounters(entry.diffElement, counts, hide, counters, document, [], mode === "code");
       }
       showOverallCounter(document, totals, hide, counters, cards, summaryEdits);
       document.body.classList.add("prco-active");
@@ -122,6 +172,7 @@
     } catch (error) {
       restore();
       enabled = false;
+      removeModePicker();
       report(true);
       console.warn("[PR Code Only] Página restaurada após falha no filtro.", error);
     } finally { observe(); }
@@ -135,7 +186,7 @@
     if (!isPullRequestFiles(location.pathname)) { reply({ enabled: false }); return; }
     enabled = !enabled;
     apply();
-    reply({ enabled });
+    reply({ enabled, mode });
   }
   chrome.runtime.onMessage.addListener(onMessage);
   function onKeydown(event) {

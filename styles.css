@@ -1,2 +1,27 @@
 body.prco-active .prco-hidden { display: none !important; }
 .prco-counter { font-size: 12px; white-space: nowrap; margin-inline: 6px; }
+#prco-mode-picker {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483647;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #57606a;
+  border-radius: 8px;
+  background: #161b22;
+  box-shadow: 0 4px 18px #0008;
+  font: 12px system-ui, sans-serif;
+}
+#prco-mode-picker button {
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 5px;
+  color: #c9d1d9;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+#prco-mode-picker button[aria-pressed="true"] { color: white; background: #238636; }
+#prco-mode-picker button:focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; }
